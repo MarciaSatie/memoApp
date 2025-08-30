@@ -59,8 +59,8 @@ export default function AuthWidget() {
 
     if (authLoading) return <p>Checking authentication...</p>;
     if (user) return (
-    <div className="absolute top-18 right-10 flex items-center gap-2 p-3 border rounded">
-        <p className="text-sm">Signed in as {user.displayName || user.email}</p>
+    <div className="absolute top-18 right-10 flex items-center gap-2 p-3 border rounded border-bd">
+        <p className="text-sm text-bd">Signed in as {user.displayName || user.email}</p>
         <button 
         onClick={() => signOut(auth)} 
         className="bg-red-500 text-white rounded px-3 py-1 text-sm"
