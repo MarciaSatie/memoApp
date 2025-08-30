@@ -1,37 +1,33 @@
 "use client";
 const THEME_KEY = "theme";
+import { useEffect } from "react";
+import { ThemeList } from "@/data/themeList";
 
 export default function ThemeSwitcher() {
 
+  useEffect(() => {
     if (typeof window !== "undefined") {
-    // On initial load, set theme from localStorage if available
-    const savedTheme = localStorage.getItem(THEME_KEY);
-    if (savedTheme) {
-        document.documentElement.setAttribute("data-theme", savedTheme);
+      const savedTheme = localStorage.getItem(THEME_KEY) || "pink";
+      document.documentElement.setAttribute("data-theme", savedTheme);
     }
-    }
+  }, []);
 
+  const setTheme = (theme) => {
+    localStorage.setItem(THEME_KEY, theme);
+    document.documentElement.setAttribute("data-theme", theme);
+  };
 
   return (
     <div className="fixed top-2 right-2 flex gap-2">
-      <button
-        onClick={() => {
-            localStorage.setItem(THEME_KEY, "pink");
-            document.documentElement.removeAttribute("data-theme");
-        }}
-        className="px-2 py-1 rounded bg-bd text-white text-sm"
-      >
-        🌸
-      </button>
-      <button
-        onClick={() => {
-            localStorage.setItem(THEME_KEY, "ocean");
-            document.documentElement.setAttribute("data-theme", "ocean");
-        }}
-        className="px-2 py-1 rounded bg-bd text-white text-sm"
-      >
-        🌊
-      </button>
+      {ThemeList.map((theme) => (
+        <button
+          key={theme.value}
+          onClick={() => setTheme(theme.value)}
+          className="px-2 py-1 rounded bg-bd text-white text-sm"
+        >
+          {theme.icon ?? theme.name}
+        </button>
+      ))}
     </div>
   );
 }

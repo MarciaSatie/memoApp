@@ -4,9 +4,18 @@
   --background: #ffffff;
   --foreground: #171717;
   --primary: 315 80% 53%;
+  --greyTxt: #96a0b4;
   --font-geist-sans: 'Geist Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --font-geist-mono: 'Geist Mono', SFMono-Regular, Consolas, 'Liberation Mono', Menlo, Courier, monospace;  
   --bd_color: 292 91% 86%;
+
+
+  --pink-primary: hsl(315, 80%, 53%);
+  --pink-bd: hsl(292, 91%, 86%);
+  --pink-greyTxt: #96a0b4;
+
+  --ocean-primary: hsl(204, 86%, 53%);
+  --ocean-bd: hsl(204, 86%, 53%);
 }
 
 
@@ -17,6 +26,7 @@
 
 
 @theme inline {
+  --greyTxt:var(--greyTxt);
   --color-primary: hsl(var(--primary));
   --color-bd: hsl(var(--bd_color));   /* 👈 expose it as "bd" */
 
