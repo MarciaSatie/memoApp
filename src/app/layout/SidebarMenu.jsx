@@ -3,6 +3,7 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useState } from "react";
 import AddDeck from "@/components/decks/AddDeck";
+import ShowDecks from "@/components/decks/ShowDecks";
 
 export default function SidebarMenu({ children })
  {
@@ -27,7 +28,7 @@ export default function SidebarMenu({ children })
         </button>
         <div className="mt-15 p-4">
           <AddDeck />
-
+          <ShowDecks />
         </div>
       </aside>
 
