@@ -3,7 +3,7 @@ import {
   collection, doc, setDoc, serverTimestamp,
   query, where, orderBy,
   getDocsFromCache, getDocsFromServer,
-  onSnapshot
+  onSnapshot,deleteDoc 
 } from "firebase/firestore";
 
 //Helper Function to create a new deck in Firestore
@@ -43,4 +43,9 @@ export async function getUserDecksCached(userId) {
         }
         return fromServer;
     }
+}
+
+export async function deleteDeck(deckId) {
+    if (!deckId) throw new Error("deleteDeck: deckId is required"); 
+    await deleteDoc(doc(db, "decks", deckId));
 }
