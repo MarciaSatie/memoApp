@@ -3,6 +3,9 @@ import { initializeApp } from "firebase/app";
 import { getAnalytics } from "firebase/analytics";
 import { getFirestore } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
+//This imports Firestore’s initialization and persistent cache helpers. We’ll use them to create a Firestore instance that writes to IndexedDB (so your data is cached locally and shared safely across multiple tabs).
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from "firebase/firestore";
+
 
 
 // TODO: Add SDKs for Firebase products that you want to use
@@ -23,7 +26,11 @@ const firebaseConfig = {
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
-const db = getFirestore(app);
+
+const db = initializeFirestore(app, {
+  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+});
+
 
 export { db, auth };
 

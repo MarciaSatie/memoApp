@@ -1,11 +1,13 @@
 import AuthWidget from "@/components/auth/AuthWidget";
+import Header from "./layout/Header";
+import SidebarMenu from "./layout/SidebarMenu";
 
 export default function Home() {
   return (
     <main className="p-6">
-      <h1 className="text-3xl font-bold">MemoMingle App</h1>
-      <p className="mt-2 text-gray-600">Your study cards app starts here.</p>
+      <Header />
       <AuthWidget />
+      <SidebarMenu />
     </main>
   );
 }

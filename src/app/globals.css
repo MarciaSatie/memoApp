@@ -3,9 +3,23 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --primary: 315 80% 53%;
+  --font-geist-sans: 'Geist Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-geist-mono: 'Geist Mono', SFMono-Regular, Consolas, 'Liberation Mono', Menlo, Courier, monospace;  
+  --bd_color: 292 91% 86%;
 }
 
+
+[data-theme="ocean"] {
+  --primary: 210 100% 50%; /* ocean blue set */
+  --bd_color: 189 92% 69%; /* ocean border color */
+}
+
+
 @theme inline {
+  --color-primary: hsl(var(--primary));
+  --color-bd: hsl(var(--bd_color));   /* 👈 expose it as "bd" */
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
