@@ -3,7 +3,7 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useState } from "react";
 import AddDeck from "@/components/decks/AddDeck";
-import Them
+
 export default function SidebarMenu({ children })
  {
   const [expanded, setExpanded] = useState(true);
