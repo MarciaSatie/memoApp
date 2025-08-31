@@ -3,19 +3,17 @@ import AuthWidget from "@/components/auth/AuthWidget";
 import Header from "./layout/Header";
 import SidebarMenu from "./layout/SidebarMenu";
 import { useAuth } from "@/app/provider/AuthProvider";
-import { useState, useEffect } from "react";
-import { useSearchParams } from "next/navigation";
+import { useState } from "react";
+import DeckQueryPanel from "./layout/DeckQueryPanel";
+import { Suspense } from "react";
+
+
 
 export default function Home() {
- const { user, loading } = useAuth();
- const loggedIn = !!user;
+  const { user, loading } = useAuth();
+  const loggedIn = !!user;
+  const [expanded, setExpanded] = useState(true);
 
- const params = useSearchParams();
-  const selDeck = params.get("deck") || null;
-  const [selectedselDeck, setSelectedselDeck] = useState(selDeck);
-  useEffect(() => {
-      setSelectedselDeck(selDeck);
-  }, [selDeck]);
 
   return (
     <main className="p-6">
@@ -23,16 +21,19 @@ export default function Home() {
       <AuthWidget />
 
       {!loading && loggedIn && (
-        <>
-          <SidebarMenu />
-          <div className="p-4">
-                <h1 className="text-2xl font-bold mb-4">Decks Page - {selectedselDeck}</h1>
-                <p className="mt-2 text-sm text-neutral-400">
-                        {selDeck ? `Selected deck: ${selDeck}` : "No deck selected"}
-                </p>
-            </div>
-        </>)}
+        <div className="flex gap-4">
+          <SidebarMenu expanded={expanded} onToggle={() => setExpanded(e => !e)}>
+            {/* Right: Cards panel fills remaining space */}
+            <section className="flex-1 min-w-0 border border-bd rounded">
+              <Suspense fallback={<div className="p-4 text-sm text-neutral-400">Loading deck…</div>}>
+                <DeckQueryPanel />
+              </Suspense>
+            </section>
+          </SidebarMenu>
 
+        </div>
+
+      )}
     </main>
   );
 }
