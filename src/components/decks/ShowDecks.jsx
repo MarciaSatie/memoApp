@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useAuth } from "@/app/provider/AuthProvider";
-import { getUserDecksCached, deleteDeck,updateDeck } from "@/data/decks";
+import { getUserDecksCached, deleteDeck,toggleFavorite} from "@/data/decks";
 import { Pencil, Trash2, Star } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
@@ -15,6 +15,8 @@ export default function ShowDecks() {
   const [show, setShow] = useState(null);
 
   const handleDelete = async (e, deck) => {
+    //e-> event object (the click event)
+    //deck -> the deck object to be deleted
     e.stopPropagation();
     try {
       await deleteDeck(deck.id);                          // Firestore delete
@@ -27,7 +29,19 @@ export default function ShowDecks() {
 
   const handleUpdate =(e,deck)=>{ 
     e.stopPropagation();
-    setShow(prev => prev===deck.id? null:deck.id);}
+    setShow(prev => prev===deck.id? null:deck.id);
+  };
+
+  const handleFavorite = async (e, deck) => {
+    e.stopPropagation();  
+    try {
+      await toggleFavorite(deck);          // Firestore update
+      setDecks(prev => prev.map(d => d.id === deck.id ? { ...d, isFavorite: !d.isFavorite } : d)); // Optimistic UI
+    } catch (err) {
+      console.error(err);
+    }
+  };
+    
 
   useEffect(() => {
     if (!user) return;
@@ -59,20 +73,27 @@ export default function ShowDecks() {
         <p className="text-sm text-greyTxt">No decks yet.</p>
       ) : (
         decks.map((deck) => {
-            const isFav = !!deck.isFavorite;
             return (
             <div key={deck.id} className="mb-2">
               <div className="flex items-center justify-between mb-2 p-2 border border-bd rounded hover:bg-neutral-700 cursor-pointer">
                   <h3 className="text-lg font-semibold">{deck.title}</h3>
 
-                  <div className="flex items-center gap-2 pl-3">
+                  <div className="flex items-center gap-2 pl-3 ">
                   <button
                       onClick={(e) => handleFavorite(e, deck)}
                       className="p-1.5 rounded hover:bg-neutral-600"
                       aria-label="Favorite deck"
                       title="Favorite deck"
                   >
-                      <Star size={16} />
+                    <Star
+                      size={16}
+                      className={
+                        deck.isFavorite
+                          ? "!stroke-yellow-400 !fill-yellow-400"
+                          : "!stroke-neutral-400 !fill-none"
+                      }
+                    />
+
                   </button>
 
                   <button

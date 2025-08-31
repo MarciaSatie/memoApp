@@ -55,4 +55,8 @@ export async function updateDeck(deckId, updates) {
     if (!updates || typeof updates !== "object") throw new Error("updateDeck: updates must be an object");  
     const deckRef = doc(db, "decks", deckId);
     await updateDoc(deckRef, updates);
-}   
+}  
+
+export async function toggleFavorite(deck){
+    await updateDeck(deck.id, { isFavorite: !deck.isFavorite });
+}
