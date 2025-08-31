@@ -3,7 +3,7 @@ import {
   collection, doc, setDoc, serverTimestamp,
   query, where, orderBy,
   getDocsFromCache, getDocsFromServer,
-  onSnapshot,deleteDoc 
+  onSnapshot,deleteDoc,updateDoc 
 } from "firebase/firestore";
 
 //Helper Function to create a new deck in Firestore
@@ -49,3 +49,10 @@ export async function deleteDeck(deckId) {
     if (!deckId) throw new Error("deleteDeck: deckId is required"); 
     await deleteDoc(doc(db, "decks", deckId));
 }
+
+export async function updateDeck(deckId, updates) {
+    if (!deckId) throw new Error("updateDeck: deckId is required");
+    if (!updates || typeof updates !== "object") throw new Error("updateDeck: updates must be an object");  
+    const deckRef = doc(db, "decks", deckId);
+    await updateDoc(deckRef, updates);
+}   
