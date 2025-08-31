@@ -4,6 +4,8 @@ import { useState, useEffect } from "react";
 import { useAuth } from "@/app/provider/AuthProvider";
 import { getUserDecksCached, deleteDeck,toggleFavorite} from "@/data/decks";
 import { Pencil, Trash2, Star } from "lucide-react";
+import { useRouter } from "next/navigation";
+
 import Link from "next/link";
 import Image from "next/image";
 import UpdateDeck from "./UpdateDeck";
@@ -13,6 +15,8 @@ export default function ShowDecks() {
   const [decks, setDecks] = useState([]);
   const [msg, setMsg] = useState("");
   const [show, setShow] = useState(null);
+  const router = useRouter();
+
 
   const handleDelete = async (e, deck) => {
     //e-> event object (the click event)
@@ -74,7 +78,12 @@ export default function ShowDecks() {
       ) : (
         decks.map((deck) => {
             return (
-            <div key={deck.id} className="mb-2">
+            <div key={deck.id}
+                onClick={() => router.push(`/?deck=${deck.id}`)}
+                className="mb-2"
+                tabIndex={0}
+                onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && router.push(`/?deck=${deck.id}`)}
+                >
               <div className="flex items-center justify-between mb-2 p-2 border border-bd rounded hover:bg-neutral-700 cursor-pointer">
                   <h3 className="text-lg font-semibold">{deck.title}</h3>
 
