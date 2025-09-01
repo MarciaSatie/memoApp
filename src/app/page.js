@@ -16,12 +16,12 @@ export default function Home() {
 
 
   return (
-    <main className="p-6">
+    <main className="p-6 ">
       <Header />
       <AuthWidget />
 
       {!loading && loggedIn && (
-        <div className="flex gap-4">
+        <div className="flex-1 flex gap-4 overflow-hidden">
           <SidebarMenu expanded={expanded} onToggle={() => setExpanded(e => !e)}>
             {/* Right: Cards panel fills remaining space */}
             <section className="flex-1 min-w-0 border border-bd rounded">

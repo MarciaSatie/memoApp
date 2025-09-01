@@ -35,10 +35,6 @@ useEffect(() => {
     <div className="p-4">
       <h1 className="text-2xl font-bold mb-4"> {deckInfo?.title ?? "Decks Page"}</h1>
 
-      <p className="mt-2 text-sm text-neutral-400">
-        {selDeck ? `Selected deck: ${selDeck}` : "No deck selected"}
-      </p>
-
       <button
         onClick={() => setOpen(true)}
         disabled={!selDeck}
