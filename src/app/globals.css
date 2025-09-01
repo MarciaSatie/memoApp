@@ -1,39 +1,42 @@
 @import "tailwindcss";
 
+/* Base (non-theme) */
 :root {
   --background: #ffffff;
   --foreground: #171717;
-  --bgDark:  #000000;
-  --primary: 315 80% 53%;
   --greyTxt: #96a0b4;
+
   --font-geist-sans: 'Geist Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  --font-geist-mono: 'Geist Mono', SFMono-Regular, Consolas, 'Liberation Mono', Menlo, Courier, monospace;  
-  --bd_color: 292 91% 86%;
+  --font-geist-mono: 'Geist Mono', SFMono-Regular, Consolas, 'Liberation Mono', Menlo, Courier, monospace;
 
-
-  --pink-primary: hsl(315, 80%, 53%);
-  --pink-bd: hsl(292, 91%, 86%);
-  --pink-greyTxt: #96a0b4;
-  --pink-mmHover:hsl(292, 69%, 76%);
-
-  --ocean-primary: hsl(204, 86%, 53%);
-  --ocean-bd: hsl(204, 86%, 53%);
-  --ocean-mmHover:hsl(204, 81%, 48%);
+  /* Default theme = pink (numbers-only HSL) */
+  --primary: 315 80% 53%;
+  --bd: 292 91% 86%;
+  --mmHover: 293 61% 73%;
 }
 
+/* Ocean theme override */
+[data-theme="ocean"] {
+  --primary: 204 86% 53%;
+  --bd: 204 86% 53%;
+  --mmHover: 204 83% 43%;
+}
 
-
+/* Tailwind tokens (minimal) */
 @theme inline {
-  --greyTxt:var(--greyTxt);
   --color-primary: hsl(var(--primary));
-  --color-bd: hsl(var(--bd_color));   /* 👈 expose it as "bd" */
+  --color-bd: hsl(var(--bd));
+  --color-mmHover: hsl(var(--mmHover));
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-greyTxt: var(--greyTxt);
+
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
+/* Optional: system dark just flips bg/fg */
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #0a0a0a;
@@ -41,8 +44,10 @@
   }
 }
 
+/* Base styles */
+html, body { height: 100%; }
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans);
 }

@@ -149,7 +149,7 @@ export default function AddCard({ deckId }) {
               setEditorJSON(json);
             }}
             disabled={isHtmlMode}
-            className="border rounded-xl p-3 bg-white text-gray-700 min-h-[300px] max-h-[600px]"
+            className="border rounded-xl p-3 bg-white text-gray-700 min-h-[600px] max-h-[600px]"
           />
         )}
       </div>
