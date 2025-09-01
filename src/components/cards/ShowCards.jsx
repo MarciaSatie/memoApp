@@ -1,7 +1,7 @@
 "use client";
 
 import { useState,useEffect } from "react";
-import Modal from "@/components/Modal";
+import Modal from "@/components/layout/Modal";
 import AddCard from "@/components/cards/AddCard";
 import {getDeckByIdCached} from "@/data/card";
 
