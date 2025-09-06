@@ -22,13 +22,13 @@ export default function Modal({ open, onClose, title, children }) {
   // Render the modal into document.body so it overlays the entire app.
   return createPortal(
     <div
-      className="fixed inset-0 z-1000 flex items-center justify-center bg-black/50 "
+      className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/50"
       onClick={onClose}
       aria-modal="true"
       role="dialog"
     >
       <div
-        className="relative w-[100%] h-[95%] max-w-4xl rounded-2xl bg-white p-6 shadow-x"
+        className="relative w-[100%] h-[95%] max-w-4xl rounded-2xl bg-white p-6 shadow-xl text-foreground overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <button
@@ -40,9 +40,27 @@ export default function Modal({ open, onClose, title, children }) {
         </button>
 
         {title && <h2 className="mb-4 text-xl text-primary font-bold">{title}</h2>}
-        <div className="text-greyTxt">{children}</div>
+
+        {/* 
+          If the content you pass in uses `prose`, Typography will
+          set a light gray body color. This wrapper forces prose
+          elements to use your theme colors instead.
+        */}
+        <div className="
+          prose max-w-none
+          prose-headings:text-foreground
+          prose-p:text-foreground
+          prose-li:text-foreground
+          prose-strong:text-foreground
+          prose-em:text-foreground
+          prose-blockquote:text-foreground
+          prose-a:text-primary
+          prose-code:text-foreground
+        ">
+          {children}
+        </div>
       </div>
     </div>,
-    document.body // <-- the comma above is required
+    document.body
   );
 }

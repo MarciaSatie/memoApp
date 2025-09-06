@@ -100,7 +100,7 @@ export default function Card({
           <button
             type="button"
             onClick={handleEditIcon}
-            className="p-1.5 rounded-full border bg-white/90 hover:bg-white"
+            className="p-1.5 rounded-full border text-gray-600 bg-white/90 hover:bg-white"
             aria-label="Edit"
             title="Edit"
           >
@@ -130,8 +130,8 @@ export default function Card({
         <div className="px-4 pb-4 h-[calc(100%-70px)]">
           <div
             className={[
-              // added border-bd + rounded + padding + overflow-auto
-              "prose prose-sm max-w-none tiptap-content text-greyTxt",
+              // No 'prose'. Use tiptap hooks + readable defaults.
+              "tiptap tiptap-content  leading-relaxed space-y-3",
               "h-full overflow-auto border border-bd rounded-xl p-3 bg-white",
               card.contentClasses || "",
               bodyClass,
@@ -188,7 +188,7 @@ export default function Card({
                 <div className="text-xs text-gray-500">{card.date}</div>
               )}
               <div
-                className="prose max-w-none tiptap-content border border-bd rounded-xl p-3 overflow-auto"
+                className="tiptap tiptap-content  leading-relaxed space-y-3 border border-bd rounded-xl p-3 overflow-auto bg-white"
                 dangerouslySetInnerHTML={{
                   __html: card.content || "<p><em>No content</em></p>",
                 }}
@@ -203,7 +203,7 @@ export default function Card({
               card={card}
               onSaved={(id) => {
                 setEditing(false);
-                onUpdated?.(id);   // tell parent to refresh
+                onUpdated?.(id); // tell parent to refresh
               }}
               onCancel={() => setEditing(false)}
             />

@@ -1,10 +1,11 @@
+/* src/app/globals.css */
 @import "tailwindcss";
 
-/* Base (non-theme) */
+/* ───────── Base (non-theme) ───────── */
 :root {
-  --background: #ffffff;
+  --background: #cbcbcb;
   --foreground: #171717;
-  --greyTxt: #96a0b4;
+  --greyTxt: #2b2b2b;
 
   --font-geist-sans: 'Geist Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --font-geist-mono: 'Geist Mono', SFMono-Regular, Consolas, 'Liberation Mono', Menlo, Courier, monospace;
@@ -15,14 +16,14 @@
   --mmHover: 293 61% 73%;
 }
 
-/* Ocean theme override */
+/* ───────── Ocean theme override ───────── */
 [data-theme="ocean"] {
   --primary: 204 86% 53%;
   --bd: 204 86% 53%;
   --mmHover: 204 83% 43%;
 }
 
-/* Tailwind tokens (minimal) */
+/* ───────── Tailwind tokens (minimal) ───────── */
 @theme inline {
   --color-primary: hsl(var(--primary));
   --color-bd: hsl(var(--bd));
@@ -36,18 +37,99 @@
   --font-mono: var(--font-geist-mono);
 }
 
-/* Optional: system dark just flips bg/fg */
+/* ───────── System dark (flip bg/fg) ───────── */
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #0a0a0a;
-    --foreground: #ededed;
+    --foreground: #5e5e5e;
+    --foregroundLight: #c6c5c5;
   }
 }
 
-/* Base styles */
+/* ───────── Base styles ───────── */
 html, body { height: 100%; }
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-geist-sans);
+}
+
+/* ───────── Code styling (scoped to editor/rendered content) ───────── */
+
+/* Option A: style the code element that HLJS themes target */
+.tiptap code.hljs,
+.tiptap-content code.hljs {
+  display: block;
+  padding: 1rem;
+  border-radius: 8px;
+  overflow-x: auto;
+  font-family: var(--font-geist-mono);
+}
+
+/* (Optional) Also keep pre scroll behavior if you like */
+.tiptap pre,
+.tiptap-content pre {
+  overflow-x: auto;
+  margin: 0; /* avoid double spacing */
+}
+
+
+/* ───────── Details/Summary — TipTap nodes ───────── */
+/* Container <details> */
+.tiptap [data-type="details"],
+.tiptap-content [data-type="details"] {
+  border: 1px solid hsl(var(--bd));
+  border-radius: 8px;
+  padding: 0.5rem;
+  margin: 0.5rem 0 1rem;
+}
+
+/* Header <summary> */
+.tiptap [data-type="detailsSummary"],
+.tiptap-content [data-type="detailsSummary"] {
+  list-style: none; /* Firefox */
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  color: hsl(var(--primary));
+  border: 1px solid hsl(var(--primary));
+  border-radius: 6px;
+  padding: 0.35rem 0.6rem;
+  background: transparent;
+  transition: background .2s, color .2s;
+  color: var(--primary);
+}
+
+/* Hide default markers (cross–browser) */
+.tiptap [data-type="detailsSummary"]::marker,
+.tiptap-content [data-type="detailsSummary"]::marker { content: ""; }
+.tiptap [data-type="detailsSummary"]::-webkit-details-marker,
+.tiptap-content [data-type="detailsSummary"]::-webkit-details-marker { display: none; }
+
+/* Custom chevron */
+.tiptap [data-type="detailsSummary"]::before,
+.tiptap-content [data-type="detailsSummary"]::before {
+  content: "▶";
+  display: inline-block;
+  margin-right: 0.25rem;
+  transition: transform .2s ease;
+  color: var(--primary);
+}
+
+/* Rotate/swap when open */
+.tiptap [data-type="details"][open] > [data-type="detailsSummary"]::before,
+.tiptap-content [data-type="details"][open] > [data-type="detailsSummary"]::before {
+  content: "▼";
+  color: var(--primary);
+}
+
+/* Hover/Open feedback */
+.tiptap [data-type="detailsSummary"]:hover,
+.tiptap-content [data-type="detailsSummary"]:hover {
+  background: hsl(var(--primary) / 0.08);
+}
+.tiptap [data-type="details"][open] > [data-type="detailsSummary"],
+.tiptap-content [data-type="details"][open] > [data-type="detailsSummary"] {
+  background: hsl(var(--primary) / 0.12);
 }

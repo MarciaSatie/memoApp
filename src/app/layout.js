@@ -1,6 +1,7 @@
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/app/provider/AuthProvider";
+import 'highlight.js/styles/atom-one-dark.css';
 
 
 

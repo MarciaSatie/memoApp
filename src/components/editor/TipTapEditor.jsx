@@ -1,3 +1,4 @@
+// src/components/editor/TipTapEditor.jsx
 "use client";
 
 import { useEffect, useState } from "react";
@@ -8,11 +9,56 @@ import TextAlign from "@tiptap/extension-text-align";
 import { TextStyle } from "@tiptap/extension-text-style";
 import Color from "@tiptap/extension-color";
 import Link from "@tiptap/extension-link";
-import { Details, DetailsSummary, DetailsContent } from '@tiptap/extension-details'
-import { Placeholder } from '@tiptap/extensions'
+import { Details, DetailsSummary, DetailsContent } from "@tiptap/extension-details";
+import Placeholder from "@tiptap/extension-placeholder";
+
+import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
+import { createLowlight } from "lowlight";
+import { mergeAttributes } from "@tiptap/core";
+
+// (optional) register a few highlight.js languages
+import javascript from "highlight.js/lib/languages/javascript";
+import typescript from "highlight.js/lib/languages/typescript";
+import xml from "highlight.js/lib/languages/xml"; // html/xml
+import css from "highlight.js/lib/languages/css";
+
+// Create lowlight instance and register languages
+const lowlight = createLowlight();
+lowlight.register("javascript", javascript);
+lowlight.register("js", javascript); // alias
+lowlight.register("typescript", typescript);
+lowlight.register("ts", typescript); // alias
+lowlight.register("html", xml);
+lowlight.register("xml", xml);
+lowlight.register("css", css);
+
+// ⬇️ Custom code block that puts `hljs` on <code> (HLJS themes target this)
+const CodeBlockHL = CodeBlockLowlight.extend({
+  renderHTML({ node, HTMLAttributes }) {
+    const lang =
+      node.attrs.language ||
+      this.options.defaultLanguage ||
+      "";
+
+    // attributes for <pre> (outer)
+    const preAttrs = mergeAttributes(this.options.HTMLAttributes, HTMLAttributes);
+
+    // attributes for <code> (inner) — add hljs + language-*
+    const languagePrefix = this.options.languageClassPrefix ?? "language-";
+    const codeAttrs = {
+      class: `hljs ${lang ? `${languagePrefix}${lang}` : ""}`.trim(),
+    };
+
+    // Return: <pre ...><code class="hljs language-xxx">…</code></pre>
+    return ["pre", preAttrs, ["code", codeAttrs, 0]];
+  },
+}).configure({
+  lowlight,
+  HTMLAttributes: {},          // keep <pre> clean; theme styles apply on <code.hljs>
+  defaultLanguage: "javascript",
+});
+
 import { SquarePlus, ChevronDown } from "lucide-react";
-
-
 import {
   Bold as BoldIcon,
   Italic as ItalicIcon,
@@ -34,38 +80,46 @@ export default function TipTapEditor({
   const editor = useEditor({
     immediatelyRender: false,
     extensions: [
-    StarterKit,
-    TextStyle,
-    Color,
-    Heading.configure({ levels: [1, 2, 3, 4, 5, 6] }),
-    TextAlign.configure({ types: ["heading", "paragraph"] }),
-    Link.configure({
+      // Disable StarterKit's built-in codeBlock so our CodeBlockHL is used
+      StarterKit.configure({ codeBlock: false }),
+
+      // Lowlight-backed code block with <code class="hljs language-xxx">
+      CodeBlockHL,
+
+      TextStyle,
+      Color,
+      Heading.configure({ levels: [1, 2, 3, 4, 5, 6] }),
+      TextAlign.configure({ types: ["heading", "paragraph"] }),
+      Link.configure({
         openOnClick: false,
         autolink: true,
         linkOnPaste: true,
         HTMLAttributes: { rel: "noopener noreferrer", target: "_blank" },
-    }),
-    Details.configure({ HTMLAttributes: { class: "border rounded p-2 my-2" } }),
-    DetailsSummary,
-    DetailsContent,
-    Placeholder.configure({
+      }),
+      Details.configure({
+        persist: true,
+        HTMLAttributes: { class: "details" },
+      }),
+      DetailsSummary,
+      DetailsContent,
+      Placeholder.configure({
         includeChildren: true,
         placeholder: ({ node }) => {
-          if (node.type.name === 'detailsSummary') {
-            return 'Summary'
-          }
-
-          return null
+          if (node.type.name === "detailsSummary") return "Summary";
+          return null;
         },
       }),
     ],
-
-    content: value || `
+    content: `
       <p>Look at these details</p>
       <details>
         <summary>This is a summary</summary>
         <p>Surprise!</p>
       </details>
+
+      <p>Code block with syntax highlighting:</p>
+      <pre><code class="language-javascript">console.log("highlight me!")</code></pre>
+
       <p>Nested details are also supported</p>
       <details open>
         <summary>This is another summary</summary>
@@ -79,7 +133,6 @@ export default function TipTapEditor({
     onUpdate: ({ editor }) => onChange?.(editor.getHTML()),
   });
 
-  // local color value to apply on demand
   const [colorValue, setColorValue] = useState("#000000");
 
   useEffect(() => {
@@ -98,6 +151,9 @@ export default function TipTapEditor({
     "px-2.5 py-1.5 border rounded text-sm grid place-items-center bg-neutral-100 hover:bg-neutral-200";
   const activeCls = "bg-neutral-300";
   const dis = !editor || disabled ? "opacity-60 cursor-not-allowed" : "";
+  const styleValue = "flex gap-1 border-2 border-neutral-300 rounded-lg p-1";
+  const styleValue2 = "flex items-center gap-1 border-2 border-neutral-300 rounded-lg p-1";
+  const iconSize = 12;
 
   function setLink() {
     if (!editor) return;
@@ -116,26 +172,21 @@ export default function TipTapEditor({
     editor?.chain().focus().unsetLink().run();
   }
 
-  // apply currently picked color to the selection
   function applyPickedColor() {
     if (!editor || disabled) return;
     editor.chain().focus().setColor(colorValue).run();
   }
 
-  // quick swatch
   function applySwatch(hex) {
     if (!editor || disabled) return;
     setColorValue(hex);
     editor.chain().focus().setColor(hex).run();
   }
 
-  let styleValue = "flex gap-1 border-2 border-neutral-300 rounded-lg p-1";
-  let styleValue2 = "flex items-center gap-1 border-2 border-neutral-300 rounded-lg p-1";
-  let iconSize = 12;
   return (
     <div className={className}>
       {/* Toolbar */}
-      <div className="mb-2 flex flex-wrap items-center gap-2 bg text-black">
+      <div className="mb-2 flex flex-wrap items-center gap-2 text-black">
         {/* Headings */}
         <div className={styleValue}>
           {[1, 2, 3, 4, 5, 6].map((level) => {
@@ -178,6 +229,8 @@ export default function TipTapEditor({
           >
             <ItalicIcon size={iconSize} />
           </button>
+
+          {/* Code block toggle (uses CodeBlockHL) */}
           <button
             type="button"
             onClick={() => editor.chain().focus().toggleCodeBlock().run()}
@@ -258,9 +311,8 @@ export default function TipTapEditor({
           </button>
         </div>
 
-      {/* Link / Unlink */}     
-      <div className={styleValue2}>
-             
+        {/* Link / Unlink */}
+        <div className={styleValue2}>
           <button
             type="button"
             onClick={setLink}
@@ -282,9 +334,8 @@ export default function TipTapEditor({
           </button>
         </div>
 
-        {/* Text color + Link */}
+        {/* Text color */}
         <div className={styleValue2}>
-          {/* picker (doesn't apply automatically) */}
           <span className="inline-flex items-center gap-1 px-2 py-1 border rounded bg-neutral-100">
             <Palette size={14} />
             <input
@@ -297,7 +348,6 @@ export default function TipTapEditor({
             />
           </span>
 
-          {/* apply current color */}
           <button
             type="button"
             onClick={applyPickedColor}
@@ -308,7 +358,6 @@ export default function TipTapEditor({
             <PaintBucket size={iconSize} />
           </button>
 
-          {/* quick swatches */}
           {["#ef4444", "#eab308", "#22c55e", "#3b82f6", "#a855f7"].map((hex) => (
             <button
               key={hex}
@@ -321,7 +370,6 @@ export default function TipTapEditor({
             />
           ))}
 
-          {/* clear color */}
           <button
             type="button"
             onClick={() => editor.chain().focus().unsetColor().run()}
@@ -330,63 +378,61 @@ export default function TipTapEditor({
             title="Clear color"
           >
             <ClearIcon size={14} />
-          </button>       
+          </button>
         </div>
 
         {/* Details */}
         <div className={styleValue}>
-            {/* Insert a new <details> block */}
-            <button
-                type="button"
-                onClick={() =>
-                editor
-                    .chain()
-                    .focus()
-                    .insertContent({
-                    type: "details",
-                    attrs: { open: true },
-                    content: [
+          <button
+            type="button"
+            onClick={() =>
+              editor
+                .chain()
+                .focus()
+                .insertContent({
+                  type: "details",
+                  attrs: { open: true },
+                  content: [
+                    {
+                      type: "detailsSummary",
+                      attrs: { class: "text-primary font-medium px-2 py-1 cursor-pointer" },
+                      content: [{ type: "text", text: "Summary" }],
+                    },
+                    {
+                      type: "detailsContent",
+                      attrs: { open: true },
+                      content: [
                         {
-                            type: "detailsSummary",
-                            content: [{ type: "text", text: "Summary" }],
+                          type: "paragraph",
+                          content: [{ type: "text", text: "Details content…" }],
                         },
-                        {
-                        type: "detailsContent",
-                        attrs: { open: true },
-                        content: [
-                            {
-                                type: "paragraph",
-                                content: [{ type: "text", text: "Details content…" }],
-                            },
-                        ],
-                        },
-                    ],
-                    })
-                    .run()
-                }
-                disabled={!editor || disabled}
-                className={`${btnBase} ${dis}`}
-                title="Insert details"
-            >
-                <SquarePlus size={iconSize} />
-            </button>
+                      ],
+                    },
+                  ],
+                })
+                .run()
+            }
+            disabled={!editor || disabled}
+            className={`${btnBase} ${dis}`}
+            title="Insert details"
+          >
+            <SquarePlus size={iconSize} />
+          </button>
 
-            {/* Toggle open/closed on the current details block */}
-            <button
-                type="button"
-                onClick={() => {
-                const isOpen = !!editor.getAttributes("details").open;
-                editor.chain().focus().updateAttributes("details", { open: !isOpen }).run();
-                }}
-                disabled={!editor || disabled || !editor.isActive("details")}
-                className={`${btnBase} ${editor.isActive("details") ? activeCls : ""} ${dis}`}
-                title="Toggle details open/closed"
-                aria-pressed={editor.isActive("details")}
-            >
-                <ChevronDown size={iconSize} />
-            </button>
-         </div>
-
+          <button
+            type="button"
+            onClick={() => {
+              const isOpen = !!editor.getAttributes("details").open;
+              editor.chain().focus().updateAttributes("details", { open: !isOpen }).run();
+            }}
+            disabled={!editor || disabled || !editor.isActive("details")}
+            className={`${btnBase} ${editor.isActive("details") ? activeCls : ""} ${dis}`}
+            title="Toggle details open/closed"
+            aria-pressed={editor.isActive("details")}
+          >
+            <ChevronDown size={iconSize} />
+          </button>
+        </div>
       </div>
 
       {/* Editor */}
