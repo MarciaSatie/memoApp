@@ -1,8 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
 import dynamic from "next/dynamic";
-import { db } from "../../app/firebase";
-import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 const CodeMirror = dynamic(
   () => import("@uiw/react-codemirror").then((m) => m.default),
   { ssr: false }
@@ -11,6 +9,7 @@ import { html } from "@codemirror/lang-html";
 import { oneDark } from "@codemirror/theme-one-dark";
 import TipTapEditor from "../editor/TipTapEditor";
 import prettier from "prettier/standalone";
+import { addCard } from "@/data/card";
 
 /* ---------------- Helpers ---------------- */
 async function prettifyHtml(source) {
@@ -27,9 +26,9 @@ async function prettifyHtml(source) {
   }
 }
 
- function getCurrentDate() {
+function getCurrentDate() {
   const date = new Date();
-  return date.toISOString().split("T")[0]; // Format as YYYY-MM-DD
+  return date.toISOString().split("T")[0]; // YYYY-MM-DD
 }
 
 export default function AddCard({ deckId }) {
@@ -43,6 +42,7 @@ export default function AddCard({ deckId }) {
 
   async function handleSave() {
     setError("");
+
     if (!deckId) {
       setError("Missing deckId");
       return;
@@ -55,21 +55,23 @@ export default function AddCard({ deckId }) {
     setSaving(true);
     try {
       const contentToSave = await prettifyHtml(content || "");
-
-      await addDoc(collection(db, "decks", deckId, "cards"), {
+      // ✅ delegate to helper (keeps Firestore logic out of component)
+      const newId = await addCard(deckId, {
         title: title.trim(),
-        date: date || new Date().toISOString().split("T")[0],
         content: contentToSave,
-        contentClasses: "tiptap-content prose prose-slate max-w-none leading-relaxed",
-        createdAt: serverTimestamp(),
         json: editorJSON ?? null,
+        date: date || getCurrentDate(),
+        contentClasses:
+          "tiptap-content prose prose-slate max-w-none leading-relaxed",
       });
-      console.log("Card saved successfully");
+
+      console.log("Card saved successfully, id:", newId);
 
       // Reset form
       setTitle("");
-      setDate("");
+      setDate(getCurrentDate());
       setContent("");
+      setEditorJSON(null);
     } catch (e) {
       console.error(e);
       setError("Failed to save card");
@@ -84,7 +86,7 @@ export default function AddCard({ deckId }) {
       const pretty = await prettifyHtml(content);
       setContent(pretty);
     })();
-  }, [isHtmlMode]);
+  }, [isHtmlMode, content]);
 
   async function formatHtmlNow() {
     if (!content) return;
@@ -111,7 +113,7 @@ export default function AddCard({ deckId }) {
       </div>
 
       <div>
-        <div className="flex items-center justify-between mb-2 max">
+        <div className="flex items-center justify-between mb-2">
           <div className="flex items-center">
             <button
               onClick={() => setIsHtmlMode((v) => !v)}
@@ -144,9 +146,9 @@ export default function AddCard({ deckId }) {
         ) : (
           <TipTapEditor
             value={content}
-            onChange={(html, json) => {
-              setContent(html);
-              setEditorJSON(json);
+            onChange={(htmlVal, jsonVal) => {
+              setContent(htmlVal);
+              setEditorJSON(jsonVal);
             }}
             disabled={isHtmlMode}
             className="border rounded-xl p-3 bg-white text-gray-700 min-h-[600px] max-h-[600px]"
