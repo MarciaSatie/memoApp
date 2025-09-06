@@ -39,8 +39,8 @@ export default function Modal({ open, onClose, title, children }) {
           ✕
         </button>
 
-        {title && <h2 className="mb-4 text-xl font-bold">{title}</h2>}
-        <div>{children}</div>
+        {title && <h2 className="mb-4 text-xl text-primary font-bold">{title}</h2>}
+        <div className="text-greyTxt">{children}</div>
       </div>
     </div>,
     document.body // <-- the comma above is required

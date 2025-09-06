@@ -2,8 +2,8 @@ import { db } from "@/app/firebase";
 import {
   doc,collection, query, orderBy,
   getDoc,addDoc, serverTimestamp,
-  getDocFromCache,   // ✅ singular (document)
-  getDocFromServer,  // ✅ singular (document)
+  getDocsFromCache,  getDocFromCache,
+  getDocsFromServer, getDocFromServer,
 } from "firebase/firestore";
 
 
@@ -19,13 +19,13 @@ export async function getDeckByIdCached(deckId) {
   console.log("deckRef:", deckRef);   // ✅ fixed
 
   try {
-    const cached = await getDocFromCache(deckRef);
+    const cached = await getDocsFromCache(deckRef);
     if (cached.exists()) return { id: cached.id, ...cached.data() };
   } catch (_) {
     // cache miss is fine
   }
 
-  const server = await getDocFromServer(deckRef);
+  const server = await getDocsFromServer(deckRef);
   if (!server.exists()) throw new Error("Deck not found");
   return { id: server.id, ...server.data() };
 }

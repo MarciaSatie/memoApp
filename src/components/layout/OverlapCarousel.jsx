@@ -15,9 +15,9 @@ export default function OverlapCarousel({
   scrollStep,
   getZIndex,                  // optional z-index resolver
 
-  /* ------- NEW (all optional) ------- */
-  enableModal = false,        // click item -> open modal
-  renderModalContent,         // (item, index) => JSX inside Modal
+  /* ------- optional modal props ------- */
+  enableModal = false,
+  renderModalContent,         // (item, index) => JSX
   getModalTitle,              // (item, index) => string
   onItemOpen,                 // (item, index) => void
   onItemClose,                // () => void
@@ -27,6 +27,9 @@ export default function OverlapCarousel({
 
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState({ item: null, index: -1 });
+
+  // NEW: track which tile is hovered
+  const [hoveredIndex, setHoveredIndex] = useState(null);
 
   const trackWidth = useMemo(() => {
     if (items.length === 0) return 0;
@@ -48,6 +51,13 @@ export default function OverlapCarousel({
     setOpen(false);
     setActive({ item: null, index: -1 });
     onItemClose?.();
+  };
+
+  // compute z-index per item. hovered item always on top
+  const resolveZIndex = (item, index) => {
+    if (hoveredIndex === index) return 10_000; // ensure top
+    if (typeof getZIndex === "function") return getZIndex(item, index);
+    return index; // default stacking
   };
 
   return (
@@ -86,13 +96,17 @@ export default function OverlapCarousel({
           {items.map((item, index) => (
             <div
               key={item.id ?? index}
-              className={`absolute ${enableModal ? "cursor-pointer" : ""}`}
+              className={`absolute ${enableModal ? "cursor-pointer" : ""} transition-transform duration-150`}
               style={{
                 top: 0,
                 left: index * overlapStep,
                 width: itemWidth,
-                zIndex: getZIndex ? getZIndex(item, index) : index,
+                zIndex: resolveZIndex(item, index),
+                transform:
+                  hoveredIndex === index ? "translateY(-4px) scale(1.02)" : "none",
               }}
+              onMouseEnter={() => setHoveredIndex(index)}
+              onMouseLeave={() => setHoveredIndex(null)}
               onClick={() => handleOpen(item, index)}
             >
               {renderItem(item, index)}
@@ -117,7 +131,9 @@ export default function OverlapCarousel({
             ? (
               <div
                 className="prose max-w-none tiptap-content"
-                dangerouslySetInnerHTML={{ __html: active.item.content || "<p><em>No content</em></p>" }}
+                dangerouslySetInnerHTML={{
+                  __html: active.item.content || "<p><em>No content</em></p>",
+                }}
               />
             )
             : null}
