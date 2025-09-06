@@ -1,7 +1,7 @@
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/app/provider/AuthProvider";
-import ThemeSwitcher from "@/components/layout/ThemeSwitcher";
+
 
 
 const geistSans = Geist({
@@ -38,7 +38,7 @@ export default function RootLayout({ children }) {
     </head>
 
       <body suppressHydrationWarning className={`${geistSans.variable} ${geistMono.variable}`}>
-        <ThemeSwitcher />
+
         <AuthProvider>{children}</AuthProvider>
       </body>
     </html>

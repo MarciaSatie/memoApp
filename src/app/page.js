@@ -17,8 +17,20 @@ export default function Home() {
 
   return (
     <main className="p-6 ">
-      <Header />
-      <AuthWidget />
+      {!loading && loggedIn && (
+        <div >
+          <AuthWidget />
+          <Header />
+        </div>
+      )}
+      {!loggedIn && (
+        <>
+          <Header />
+          <AuthWidget />
+        </>
+      )}
+
+
 
       {!loading && loggedIn && (
         <div className="flex-1 flex gap-4 overflow-hidden">

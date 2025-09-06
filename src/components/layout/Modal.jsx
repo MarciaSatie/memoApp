@@ -22,7 +22,7 @@ export default function Modal({ open, onClose, title, children }) {
   // Render the modal into document.body so it overlays the entire app.
   return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 "
+      className="fixed inset-0 z-1000 flex items-center justify-center bg-black/50 "
       onClick={onClose}
       aria-modal="true"
       role="dialog"

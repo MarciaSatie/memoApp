@@ -2,11 +2,10 @@
 "use client";
 
 import React, { useMemo, useRef, useState } from "react";
-import Modal from "@/components/layout/Modal";
 
 export default function OverlapCarousel({
   items = [],
-  renderItem,                 // tile renderer (required)
+  renderItem,                 // (item, index) => JSX (required)
   itemWidth = 288,
   overlapStep = 200,
   height = 480,
@@ -14,21 +13,12 @@ export default function OverlapCarousel({
   showArrows = true,
   scrollStep,
   getZIndex,                  // optional z-index resolver
-
-  /* ------- optional modal props ------- */
-  enableModal = false,
-  renderModalContent,         // (item, index) => JSX
-  getModalTitle,              // (item, index) => string
-  onItemOpen,                 // (item, index) => void
-  onItemClose,                // () => void
+  onItemClick,                // optional: (item, index) => void
 }) {
   const scrollRef = useRef(null);
   const step = scrollStep ?? Math.max(180, overlapStep);
 
-  const [open, setOpen] = useState(false);
-  const [active, setActive] = useState({ item: null, index: -1 });
-
-  // NEW: track which tile is hovered
+  // track which tile is hovered (to float it on top)
   const [hoveredIndex, setHoveredIndex] = useState(null);
 
   const trackWidth = useMemo(() => {
@@ -40,24 +30,11 @@ export default function OverlapCarousel({
     scrollRef.current?.scrollBy({ left: dir * step, behavior: "smooth" });
   };
 
-  const handleOpen = (item, index) => {
-    if (!enableModal) return;
-    setActive({ item, index });
-    setOpen(true);
-    onItemOpen?.(item, index);
-  };
-
-  const handleClose = () => {
-    setOpen(false);
-    setActive({ item: null, index: -1 });
-    onItemClose?.();
-  };
-
   // compute z-index per item. hovered item always on top
   const resolveZIndex = (item, index) => {
-    if (hoveredIndex === index) return 10_000; // ensure top
+    if (hoveredIndex === index) return 100; // ensure top
     if (typeof getZIndex === "function") return getZIndex(item, index);
-    return index; // default stacking
+    return index; // default stacking: later items over earlier ones
   };
 
   return (
@@ -70,7 +47,7 @@ export default function OverlapCarousel({
           <button
             type="button"
             onClick={() => scrollBy(-1)}
-            className="absolute left-2 top-1/2 -translate-y-1/2 z-[1000] rounded-full border bg-white/80 px-3 py-2 shadow hover:bg-white"
+            className="absolute left-2 top-1/2 -translate-y-1/2 z-[50] rounded-full border bg-white/80 px-3 py-2 shadow hover:bg-white"
             aria-label="Previous"
           >
             ‹
@@ -78,7 +55,7 @@ export default function OverlapCarousel({
           <button
             type="button"
             onClick={() => scrollBy(1)}
-            className="absolute right-2 top-1/2 -translate-y-1/2 z-[1000] rounded-full border bg-white/80 px-3 py-2 shadow hover:bg-white"
+            className="absolute right-2 top-1/2 -translate-y-1/2 z-[100] rounded-full border bg-white/80 px-3 py-2 shadow hover:bg-white"
             aria-label="Next"
           >
             ›
@@ -96,7 +73,7 @@ export default function OverlapCarousel({
           {items.map((item, index) => (
             <div
               key={item.id ?? index}
-              className={`absolute ${enableModal ? "cursor-pointer" : ""} transition-transform duration-150`}
+              className={`absolute transition-transform duration-150`}
               style={{
                 top: 0,
                 left: index * overlapStep,
@@ -107,38 +84,13 @@ export default function OverlapCarousel({
               }}
               onMouseEnter={() => setHoveredIndex(index)}
               onMouseLeave={() => setHoveredIndex(null)}
-              onClick={() => handleOpen(item, index)}
+              onClick={() => onItemClick?.(item, index)}
             >
               {renderItem(item, index)}
             </div>
           ))}
         </div>
       </div>
-
-      {enableModal && (
-        <Modal
-          open={open}
-          onClose={handleClose}
-          title={
-            active.item && getModalTitle
-              ? getModalTitle(active.item, active.index)
-              : active.item?.title || "Details"
-          }
-        >
-          {active.item && renderModalContent
-            ? renderModalContent(active.item, active.index)
-            : active.item
-            ? (
-              <div
-                className="prose max-w-none tiptap-content"
-                dangerouslySetInnerHTML={{
-                  __html: active.item.content || "<p><em>No content</em></p>",
-                }}
-              />
-            )
-            : null}
-        </Modal>
-      )}
     </div>
   );
 }

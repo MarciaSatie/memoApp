@@ -4,6 +4,7 @@ import {
   getDoc,addDoc, serverTimestamp,
   getDocsFromCache,  getDocFromCache,
   getDocsFromServer, getDocFromServer,
+  updateDoc, deleteDoc,
 } from "firebase/firestore";
 
 
@@ -19,13 +20,13 @@ export async function getDeckByIdCached(deckId) {
   console.log("deckRef:", deckRef);   // ✅ fixed
 
   try {
-    const cached = await getDocsFromCache(deckRef);
+    const cached = await getDocFromCache(deckRef);
     if (cached.exists()) return { id: cached.id, ...cached.data() };
   } catch (_) {
     // cache miss is fine
   }
 
-  const server = await getDocsFromServer(deckRef);
+  const server = await getDocFromServer(deckRef);
   if (!server.exists()) throw new Error("Deck not found");
   return { id: server.id, ...server.data() };
 }
@@ -64,3 +65,42 @@ export async function getCardsByDeckCached(deckId) {
   const serverSnap = await getDocsFromServer(q);
   return serverSnap.docs.map(d => ({ id: d.id, ...d.data() }));
 }
+
+
+// decks/{deckId}/cards/{cardId} — update
+export async function updateCard(deckId, cardId, updates) {
+  const cardRef = doc(db, "decks", deckId, "cards", cardId);
+  await updateDoc(cardRef, {
+    ...updates,
+    updatedAt: serverTimestamp(),
+  });
+} 
+
+// decks/{deckId}/cards/{cardId} — delete
+export async function deleteCard(deckId, cardId) {
+  const cardRef = doc(db, "decks", deckId, "cards", cardId);
+  await deleteDoc(cardRef);
+}
+
+
+// decks/{deckId}/cards/{cardId} — get single card
+export async function getCardById(deckId, cardId) {
+  const cardRef = doc(db, "decks", deckId, "cards", cardId);  
+  const snap = await getDoc(cardRef);
+  if (!snap.exists()) throw new Error("Card not found");
+  return { id: snap.id, ...snap.data() };
+} 
+
+
+export async function getCardByIdCached(deckId, cardId) {
+  const cardRef = doc(db, "decks", deckId, "cards", cardId);
+  try {
+    const cached = await getDocFromCache(cardRef);
+    if (cached.exists()) return { id: cached.id, ...cached.data() };
+  } catch (_) {
+    // cache miss is fine
+  }
+  const server = await getDocFromServer(cardRef);
+  if (!server.exists()) throw new Error("Card not found");
+  return { id: server.id, ...server.data() };
+} 

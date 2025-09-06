@@ -1,5 +1,5 @@
 import Image from "next/image";
-
+import ThemeSwitcher from "@/components/layout/ThemeSwitcher";
 
 export default function Header() {
   return (
@@ -15,7 +15,8 @@ export default function Header() {
         />
         <h1 className=" text-title text-2xl font-bold">Memo Mingle App</h1>
       </div>
-
+      {/* RIGHT SIDE: theme switcher */}
+      <ThemeSwitcher />
     </div>
   );
 }

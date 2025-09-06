@@ -59,7 +59,7 @@ export default function AuthWidget() {
 
     if (authLoading) return <p>Checking authentication...</p>;
     if (user) return (
-        <div className="absolute top-20 right-10 flex items-center gap-2 p-2 border rounded border-bd
+        <div className="absolute top-20 right-10 flex items-center gap-2 p-2 
                         max-sm:static max-sm:w-full max-sm:justify-end">
             {/* Hide text on small screens */}
             <p className="text-sm text-bd hidden sm:block">

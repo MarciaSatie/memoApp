@@ -5,10 +5,11 @@ import Modal from "@/components/layout/Modal";
 import AddCard from "@/components/cards/AddCard";
 import { getDeckByIdCached, getCardsByDeckCached } from "@/data/card";
 import OverlapCarousel from "@/components/layout/OverlapCarousel";
+import Card from "./Card";
 
 export default function ShowCards({ deck }) {
   const [open, setOpen] = useState(false);
-  const selDeck = deck || null;
+  const deckId = deck || null;
   const [deckInfo, setDeckInfo] = useState(null);
   const [cards, setCards] = useState([]);
 
@@ -17,9 +18,9 @@ export default function ShowCards({ deck }) {
 
   // Deck info (cache-first)
   useEffect(() => {
-    if (!selDeck) return setDeckInfo(null);
+    if (!deckId) return setDeckInfo(null);
     let cancelled = false;
-    getDeckByIdCached(selDeck)
+    getDeckByIdCached(deckId)
       .then((d) => !cancelled && setDeckInfo(d))
       .catch((err) => {
         console.error("Failed to load deck:", err);
@@ -28,15 +29,15 @@ export default function ShowCards({ deck }) {
     return () => {
       cancelled = true;
     };
-  }, [selDeck]);
+  }, [deckId]);
 
   // Cards (cache-first)
   useEffect(() => {
-    if (!selDeck) return setCards([]);
+    if (!deckId) return setCards([]);
     let cancelled = false;
     (async () => {
       try {
-        const cardList = await getCardsByDeckCached(selDeck);
+        const cardList = await getCardsByDeckCached(deckId);
         if (!cancelled) setCards(cardList);
       } catch (err) {
         console.error("Failed to load cards:", err);
@@ -46,7 +47,7 @@ export default function ShowCards({ deck }) {
     return () => {
       cancelled = true;
     };
-  }, [selDeck, refreshKey]);
+  }, [deckId, refreshKey]);
 
   const handleCloseAddModal = () => {
     setOpen(false);
@@ -55,18 +56,16 @@ export default function ShowCards({ deck }) {
 
   // how each card tile looks in the carousel
   const renderItem = (item) => (
-    <div className="p-4 bg-white rounded-2xl shadow border h-[440px] overflow-hidden">
-      <h2 className="text-lg text-primary font-semibold mb-2 line-clamp-2">
-        {item.title || "Untitled"}
-      </h2>
-      <div
-        className="text-greyTxt prose prose-sm max-w-none tiptap-content h-[360px] overflow-auto"
-        dangerouslySetInnerHTML={{ __html: item.content || "" }}
-      />
-    </div>
+    <Card
+      key={item.id ?? index}
+      deckId={deckId}
+      card={item}
+      height={440}
+      onUpdated={() => setRefreshKey((k) => k + 1)}
+      onDeleted={() => setRefreshKey((k) => k + 1)}
+    />
   );
 
-  const getZIndex = (_item, index) => cards.length - index;
 
   return (
     <>
@@ -77,14 +76,14 @@ export default function ShowCards({ deck }) {
 
         <button
           onClick={() => setOpen(true)}
-          disabled={!selDeck}
+          disabled={!deckId}
           className="mt-4 rounded-lg bg-primary px-4 py-2 text-white hover:bg-bd disabled:opacity-50"
         >
           Add Card
         </button>
 
         <Modal open={open} onClose={handleCloseAddModal} title="Add a new card">
-          <AddCard deckId={selDeck} />
+          <AddCard deckId={deckId} />
         </Modal>
       </div>
 
@@ -114,7 +113,6 @@ export default function ShowCards({ deck }) {
                 />
               </div>
             )}
-            getZIndex={getZIndex}
             className="bg-neutral-900/80 rounded-2xl border"
           />
         )}
