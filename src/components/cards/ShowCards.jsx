@@ -6,6 +6,7 @@ import AddCard from "@/components/cards/AddCard";
 import { getDeckByIdCached, getCardsByDeckCached } from "@/data/card";
 import OverlapCarousel from "@/components/layout/OverlapCarousel";
 import Card from "./Card";
+import RefreshBTN from "../layout/RefreshBTN";
 
 export default function ShowCards({ deck }) {
   const [open, setOpen] = useState(false);
@@ -13,6 +14,7 @@ export default function ShowCards({ deck }) {
   const [deckInfo, setDeckInfo] = useState(null);
   const [cards, setCards] = useState([]);
 
+  
   // re-fetch trigger after closing Add modal
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -54,25 +56,37 @@ export default function ShowCards({ deck }) {
     setRefreshKey((k) => k + 1); // refresh list after adding
   };
 
-  // how each card tile looks in the carousel
-  const renderItem = (item) => (
-    <Card
-      key={item.id ?? index}
-      deckId={deckId}
-      card={item}
-      height={440}
-      onUpdated={() => setRefreshKey((k) => k + 1)}
-      onDeleted={() => setRefreshKey((k) => k + 1)}
-    />
-  );
+ const renderItem = (item, index) => (
+  <Card
+    key={item.id ?? index}
+    deckId={deckId}
+    card={item}
+    height={440}
+    onUpdated={() => setRefreshKey(k => k + 1)}
+    onDeleted={() => setRefreshKey(k => k + 1)}
+  />
+);
+
 
 
   return (
     <>
       <div className="p-4">
-        <h1 className="text-2xl font-bold mb-4">
-          {deckInfo?.title ?? "Decks Page"}
-        </h1>
+        <div className="flex items-center gap-4">
+          <h1 className="text-2xl font-bold mb-4">
+            {deckInfo?.title ?? "Decks Page"}
+          </h1>
+
+            <RefreshBTN
+              deckId={deckId}
+              onRefreshed={({ deck, cards }) => {
+                if (deck) setDeckInfo(deck);
+                if (Array.isArray(cards)) setCards(cards);
+                // optional: also bump refreshKey if you want to force a re-read elsewhere
+                // setRefreshKey(k => k + 1);
+              }}
+            />
+          </div>
 
         <button
           onClick={() => setOpen(true)}

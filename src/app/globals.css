@@ -1,5 +1,6 @@
 /* src/app/globals.css */
 @import "tailwindcss";
+@import 'highlight.js/styles/atom-one-dark.css';
 
 /* ───────── Base (non-theme) ───────── */
 :root {

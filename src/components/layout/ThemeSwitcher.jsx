@@ -3,6 +3,7 @@ const THEME_KEY = "theme";
 import { useEffect } from "react";
 import { ThemeList } from "@/data/themeList";
 
+
 export default function ThemeSwitcher() {
 
   useEffect(() => {
@@ -28,6 +29,7 @@ export default function ThemeSwitcher() {
           {theme.icon ?? theme.name}
         </button>
       ))}
+
     </div>
   );
 }
