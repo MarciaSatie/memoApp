@@ -33,30 +33,18 @@ lowlight.register("xml", xml);
 lowlight.register("css", css);
 
 // ⬇️ Custom code block that puts `hljs` on <code> (HLJS themes target this)
-const CodeBlockHL = CodeBlockLowlight.extend({
-  renderHTML({ node, HTMLAttributes }) {
-    const lang =
-      node.attrs.language ||
-      this.options.defaultLanguage ||
-      "";
 
-    // attributes for <pre> (outer)
-    const preAttrs = mergeAttributes(this.options.HTMLAttributes, HTMLAttributes);
 
-    // attributes for <code> (inner) — add hljs + language-*
-    const languagePrefix = this.options.languageClassPrefix ?? "language-";
-    const codeAttrs = {
-      class: `hljs ${lang ? `${languagePrefix}${lang}` : ""}`.trim(),
-    };
+ // keep your existing imports / lowlight registrations
 
-    // Return: <pre ...><code class="hljs language-xxx">…</code></pre>
-    return ["pre", preAttrs, ["code", codeAttrs, 0]];
-  },
-}).configure({
+const CodeBlockHL = CodeBlockLowlight.configure({
   lowlight,
-  HTMLAttributes: {},          // keep <pre> clean; theme styles apply on <code.hljs>
   defaultLanguage: "javascript",
+  // makes <code class="hljs language-xxx">…
+  languageClassPrefix: "hljs language-",
 });
+
+
 
 import { SquarePlus, ChevronDown } from "lucide-react";
 import {

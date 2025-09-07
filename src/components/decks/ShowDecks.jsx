@@ -5,6 +5,7 @@ import { useAuth } from "@/app/provider/AuthProvider";
 import { getUserDecksCached, deleteDeck,toggleFavorite} from "@/data/decks";
 import { Pencil, Trash2, Star } from "lucide-react";
 import { useRouter } from "next/navigation";
+import RefreshDecks from "../layout/RefreshDecks";
 
 import UpdateDeck from "./UpdateDeck";
 
@@ -67,7 +68,11 @@ export default function ShowDecks() {
 
   return (
     <div>
-      <h2 className="mb-3 text-lg font-semibold">ShowDecks</h2>
+      <div className="flex items-center justify-between mb-2">
+        <h2 className="mb-3 text-lg font-semibold">ShowDecks</h2>
+        <RefreshDecks onRefreshed={(decks) => setDecks(decks)} />
+
+      </div>
 
       {msg && <p className="text-sm text-greyTxt mb-2">{msg}</p>}
 
