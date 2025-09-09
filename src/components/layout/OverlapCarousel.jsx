@@ -34,7 +34,7 @@ export default function OverlapCarousel({
     );
   }
 
-  // We render 3 copies for infinite effect: [A | B | C]
+  // Render 3 copies for infinite effect: [A | B | C]
   const COPIES = canLoop ? 3 : 1;
   const PAD = canLoop ? N : 0;           // middle block starts at index N
   const TOTAL = N * COPIES;
@@ -47,9 +47,27 @@ export default function OverlapCarousel({
   const [vIndex, setVIndex] = useState(startVIndex);      // virtual index [0..TOTAL-1]
   const [offset, setOffset] = useState(() => -startVIndex * overlapStep);
   const [hoveredIndex, setHoveredIndex] = useState(null);
-  const [anim, setAnim] = useState(true);                 // transition on/off (drag disables)
-  const drag = useRef({ active: false, startX: 0, baseOffset: 0, moved: false });
-  const clickThreshold = 6; // px to differentiate click vs drag
+  const [anim, setAnim] = useState(true);                 // transition on/off
+
+  // Drag state (parent/viewport)
+  const drag = useRef({
+    active: false,
+    captured: false,   // only true after moving past threshold
+    startX: 0,
+    baseOffset: 0,
+    moved: false,
+  });
+
+  // Card tap detection (per pointer)
+  const tap = useRef({
+    virtI: -1,
+    x: 0,
+    y: 0,
+  });
+
+  // Thresholds
+  const clickThreshold = 8;       // px to count as a click (tap)
+  const dragAcquire = 8;          // px before the track starts following the pointer
 
   // Track widths
   const copyWidth = useMemo(
@@ -107,19 +125,34 @@ export default function OverlapCarousel({
     setOffset(-vIndex * overlapStep);
   }, [vIndex, overlapStep]);
 
-  // Pointer drag (mouse/touch/pen)
+  // -------------------- Drag handling (viewport; no pointer capture) --------------------
   const onPointerDown = (e) => {
+    // left button only
+    if (e.button !== undefined && e.button !== 0) return;
     const x = e.clientX ?? (e.touches && e.touches[0]?.clientX) ?? 0;
-    drag.current = { active: true, startX: x, baseOffset: offset, moved: false };
-    setAnim(false);
-    e.currentTarget.setPointerCapture?.(e.pointerId);
+    drag.current = {
+      active: true,
+      captured: false,
+      startX: x,
+      baseOffset: offset,
+      moved: false,
+    };
+    // don’t disable transition yet; wait until we actually capture
   };
 
   const onPointerMove = (e) => {
     if (!drag.current.active) return;
     const x = e.clientX ?? (e.touches && e.touches[0]?.clientX) ?? 0;
     const dx = x - drag.current.startX;
-    if (Math.abs(dx) > clickThreshold) drag.current.moved = true;
+
+    if (!drag.current.captured && Math.abs(dx) >= dragAcquire) {
+      drag.current.captured = true;
+      setAnim(false); // turn off transition only once we start dragging
+    }
+
+    if (!drag.current.captured) return;
+
+    drag.current.moved = Math.abs(dx) >= clickThreshold;
 
     const min = -lastV * overlapStep;
     const max = 0;
@@ -130,33 +163,25 @@ export default function OverlapCarousel({
 
   const endDrag = () => {
     if (!drag.current.active) return;
+    const wasCaptured = drag.current.captured;
     drag.current.active = false;
 
-    const rawV = -offset / overlapStep;
-    const nearest = clampV(Math.round(rawV));
-    setAnim(true);
-    setVIndex(nearest);
-    setOffset(-nearest * overlapStep);
-
-    if (canLoop) setTimeout(normalizeIfNeeded, animationMs + 20);
+    if (wasCaptured) {
+      const rawV = -offset / overlapStep;
+      const nearest = clampV(Math.round(rawV));
+      setAnim(true);
+      setVIndex(nearest);
+      setOffset(-nearest * overlapStep);
+      if (canLoop) setTimeout(normalizeIfNeeded, animationMs + 20);
+    } else {
+      setAnim(true);
+    }
   };
 
   const onPointerUp = () => endDrag();
   const onPointerCancel = () => endDrag();
   const onMouseLeave = () => endDrag();
-
-  // Click passthrough (ignore if it was a drag)
-  const handleItemClick = (item, virtI) => {
-    if (drag.current.moved) return;
-    const realI = virtI % N;
-    onItemClick?.(item, realI);
-  };
-
-  // Keyboard navigation
-  const onKeyDown = (e) => {
-    if (e.key === "ArrowRight") { e.preventDefault(); next(); }
-    if (e.key === "ArrowLeft")  { e.preventDefault(); prev(); }
-  };
+  // --------------------------------------------------------------------------------------
 
   // ---------- Z-INDEX: active on top, neighbors next, hover wins ----------
   const activeReal = vIndex % N;
@@ -175,6 +200,47 @@ export default function OverlapCarousel({
   // -----------------------------------------------------------------------
 
   const getItemAt = (virtI) => items[virtI % N];
+
+  // Card-level tap detection: pointerdown + pointerup within small movement
+  const onCardPointerDown = (virtI) => (e) => {
+    tap.current = {
+      virtI,
+      x: e.clientX ?? (e.touches && e.touches[0]?.clientX) ?? 0,
+      y: e.clientY ?? (e.touches && e.touches[0]?.clientY) ?? 0,
+    };
+    // bring this card above neighbors during press
+    setHoveredIndex(virtI);
+  };
+
+  const onCardPointerUp = (item, virtI) => (e) => {
+    // restore hover after short delay (so the modal can open on top if it relies on focus)
+    setTimeout(() => setHoveredIndex(null), 0);
+
+    // if the parent considered this a drag, do nothing
+    if (drag.current.captured && drag.current.moved) return;
+
+    const upX = e.clientX ?? (e.touches && e.touches[0]?.clientX) ?? 0;
+    const upY = e.clientY ?? (e.touches && e.touches[0]?.clientY) ?? 0;
+    const dx = Math.abs(upX - tap.current.x);
+    const dy = Math.abs(upY - tap.current.y);
+
+    // must be same card and small movement to count as a tap
+    if (tap.current.virtI !== virtI) return;
+    if (dx > clickThreshold || dy > clickThreshold) return;
+
+    const realI = virtI % N;
+
+    // Defer to next tick so any parent pointerup/endDrag finishes first
+    requestAnimationFrame(() => {
+      onItemClick?.(item, realI);
+    });
+  };
+
+  // Keyboard navigation
+  const onKeyDown = (e) => {
+    if (e.key === "ArrowRight") { e.preventDefault(); next(); }
+    if (e.key === "ArrowLeft")  { e.preventDefault(); prev(); }
+  };
 
   return (
     <div
@@ -230,7 +296,7 @@ export default function OverlapCarousel({
             return (
               <div
                 key={`${item.id ?? (virtI % N)}__${virtI}`}
-                className="absolute transition-transform duration-150"
+                className="absolute transition-transform duration-150 outline-none"
                 style={{
                   top: 0,
                   left: virtI * overlapStep,
@@ -239,9 +305,21 @@ export default function OverlapCarousel({
                   transform:
                     hoveredIndex === virtI ? "translateY(-4px) scale(1.02)" : "none",
                 }}
+                // Accessibility: allow keyboard "Enter"/"Space" to activate
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    const realI = virtI % N;
+                    onItemClick?.(item, realI);
+                  }
+                }}
+                // Card-level tap detection
+                onPointerDown={onCardPointerDown(virtI)}
+                onPointerUp={onCardPointerUp(item, virtI)}
                 onMouseEnter={() => setHoveredIndex(virtI)}
                 onMouseLeave={() => setHoveredIndex(null)}
-                onClick={() => handleItemClick(item, virtI)}
                 aria-current={virtI === vIndex ? "true" : undefined}
               >
                 {renderItem(item, virtI % N)}
