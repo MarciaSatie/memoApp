@@ -34,6 +34,15 @@ export default function OverlapCarousel({
     );
   }
 
+  // ----------------- helpers -----------------
+  const isEditableTarget = (el) => {
+    if (!el) return false;
+    if (el.isContentEditable) return true;
+    const tag = el.tagName?.toLowerCase();
+    return tag === "input" || tag === "textarea" || tag === "select";
+  };
+  // -------------------------------------------
+
   // Render 3 copies for infinite effect: [A | B | C]
   const COPIES = canLoop ? 3 : 1;
   const PAD = canLoop ? N : 0;           // middle block starts at index N
@@ -65,7 +74,7 @@ export default function OverlapCarousel({
   const clickThreshold = 8;       // px to count as a click (tap)
   const dragAcquire = 8;          // px before the track starts following the pointer
 
-  // Measure viewport width so we can order only the currently visible cards
+  // Measure viewport width to order only currently visible cards
   const viewportRef = useRef(null);
   const [vpWidth, setVpWidth] = useState(0);
   useEffect(() => {
@@ -194,7 +203,7 @@ export default function OverlapCarousel({
   // --------------------------------------------------------------------------------------
 
   // ---------- Z-INDEX ORDERING BY VISIBLE X-POSITION ----------
-  // Build a map of virtI -> order (left→right among currently visible cards)
+  // Map of virtI -> order (left→right among currently visible cards)
   const visibleOrder = useMemo(() => {
     const map = new Map();
     const buffer = itemWidth; // count partially visible neighbors
@@ -218,12 +227,11 @@ export default function OverlapCarousel({
     return map;
   }, [TOTAL, overlapStep, itemWidth, offset, vpWidth]);
 
+  // Keep card z-index modest so modals (z-50+) are on top; arrows use z-40.
   const resolveZIndex = (virtI) => {
-    if (hoveredIndex === virtI) return 4000;      // hover wins
-    const order = visibleOrder.get(virtI);
-    // Base ensures we sit above backgrounds & below arrow buttons (z-[3100])
-    // Rightmost (largest order) will be on top.
-    return 2000 + (order ?? 0);
+    if (hoveredIndex === virtI) return 30; // hover wins within carousel
+    const order = visibleOrder.get(virtI) ?? 0;
+    return 10 + order; // 10..(10+visibleCount-1)
   };
   // ------------------------------------------------------------
 
@@ -251,13 +259,15 @@ export default function OverlapCarousel({
     if (dx > clickThreshold || dy > clickThreshold) return;
 
     const realI = virtI % N;
+    // Defer so snapping/normalize can finish first
     requestAnimationFrame(() => onItemClick?.(item, realI));
   };
 
-  // Keyboard navigation
-  const onKeyDown = (e) => {
+  // Keyboard navigation (guard editable targets)
+  const onViewportKeyDown = (e) => {
+    if (isEditableTarget(e.target)) return;
     if (e.key === "ArrowRight") { e.preventDefault(); next(); }
-    if (e.key === "ArrowLeft")  { e.preventDefault(); prev(); }
+    else if (e.key === "ArrowLeft") { e.preventDefault(); prev(); }
   };
 
   return (
@@ -270,7 +280,8 @@ export default function OverlapCarousel({
           <button
             type="button"
             onClick={prev}
-            className="absolute left-2 top-1/2 -translate-y-1/2 z-[3100] rounded-full border bg-white/80 px-3 py-2 shadow hover:bg-white"
+            // z-40 so common modals (z-50) render above; cards stay ≤ z-30
+            className="absolute left-2 top-1/2 -translate-y-1/2 z-40 rounded-full border bg-white/80 px-3 py-2 shadow hover:bg-white"
             aria-label="Previous"
           >
             ‹
@@ -278,7 +289,7 @@ export default function OverlapCarousel({
           <button
             type="button"
             onClick={next}
-            className="absolute right-2 top-1/2 -translate-y-1/2 z-[3100] rounded-full border bg-white/80 px-3 py-2 shadow hover:bg-white"
+            className="absolute right-2 top-1/2 -translate-y-1/2 z-40 rounded-full border bg-white/80 px-3 py-2 shadow hover:bg-white"
             aria-label="Next"
           >
             ›
@@ -293,7 +304,7 @@ export default function OverlapCarousel({
         tabIndex={0}
         role="group"
         aria-label="Overlap carousel"
-        onKeyDown={onKeyDown}
+        onKeyDown={onViewportKeyDown}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
@@ -320,13 +331,15 @@ export default function OverlapCarousel({
                   top: 0,
                   left: virtI * overlapStep,
                   width: itemWidth,
-                  zIndex: resolveZIndex(virtI),
+                  zIndex: resolveZIndex(virtI),   // ≤ 30
                   transform:
                     hoveredIndex === virtI ? "translateY(-4px) scale(1.02)" : "none",
                 }}
                 role="button"
                 tabIndex={0}
                 onKeyDown={(e) => {
+                  if (isEditableTarget(e.target)) return;
+                  if (e.currentTarget !== e.target) return; // only when card itself is focused
                   if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault();
                     const realI = virtI % N;
