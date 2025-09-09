@@ -40,7 +40,7 @@ export default function SidebarMenu({ children, expanded, onToggle }) {
           {expanded ? <ChevronLeft size={18} /> : <ChevronRight size={18} />}
         </button>
 
-        <div className="mt-15 p-4">
+        <div className="mt-15 p-4 m-10">
           <AddDeck />
           <ShowDecks />
         </div>
