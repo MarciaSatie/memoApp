@@ -71,7 +71,7 @@ export default function ShowCards({ deck }) {
 
   return (
     <>
-      <div className="p-4">
+      <div className="p-4 overflow-auto">
         <div className="flex items-center gap-4">
           <h1 className="text-2xl font-bold mb-4">
             {deckInfo?.title ?? "Decks Page"}

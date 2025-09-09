@@ -49,25 +49,36 @@ export default function OverlapCarousel({
   const [hoveredIndex, setHoveredIndex] = useState(null);
   const [anim, setAnim] = useState(true);                 // transition on/off
 
-  // Drag state (parent/viewport)
+  // Drag state (viewport)
   const drag = useRef({
     active: false,
-    captured: false,   // only true after moving past threshold
+    captured: false,   // becomes true after moving past threshold
     startX: 0,
     baseOffset: 0,
     moved: false,
   });
 
-  // Card tap detection (per pointer)
-  const tap = useRef({
-    virtI: -1,
-    x: 0,
-    y: 0,
-  });
+  // Card tap detection
+  const tap = useRef({ virtI: -1, x: 0, y: 0 });
 
   // Thresholds
   const clickThreshold = 8;       // px to count as a click (tap)
   const dragAcquire = 8;          // px before the track starts following the pointer
+
+  // Measure viewport width so we can order only the currently visible cards
+  const viewportRef = useRef(null);
+  const [vpWidth, setVpWidth] = useState(0);
+  useEffect(() => {
+    const el = viewportRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      const r = entries[0]?.contentRect;
+      if (r) setVpWidth(Math.round(r.width));
+    });
+    ro.observe(el);
+    setVpWidth(el.clientWidth);
+    return () => ro.disconnect();
+  }, []);
 
   // Track widths
   const copyWidth = useMemo(
@@ -137,7 +148,6 @@ export default function OverlapCarousel({
       baseOffset: offset,
       moved: false,
     };
-    // don’t disable transition yet; wait until we actually capture
   };
 
   const onPointerMove = (e) => {
@@ -147,7 +157,7 @@ export default function OverlapCarousel({
 
     if (!drag.current.captured && Math.abs(dx) >= dragAcquire) {
       drag.current.captured = true;
-      setAnim(false); // turn off transition only once we start dragging
+      setAnim(false); // only disable transition when we actually start dragging
     }
 
     if (!drag.current.captured) return;
@@ -183,57 +193,65 @@ export default function OverlapCarousel({
   const onMouseLeave = () => endDrag();
   // --------------------------------------------------------------------------------------
 
-  // ---------- Z-INDEX: active on top, neighbors next, hover wins ----------
-  const activeReal = vIndex % N;
-  const circDist = (a, b) => {
-    const d = Math.abs(a - b);
-    return Math.min(d, N - d);
-  };
+  // ---------- Z-INDEX ORDERING BY VISIBLE X-POSITION ----------
+  // Build a map of virtI -> order (left→right among currently visible cards)
+  const visibleOrder = useMemo(() => {
+    const map = new Map();
+    const buffer = itemWidth; // count partially visible neighbors
+    const minX = -buffer;                // left boundary (relative to viewport)
+    const maxX = vpWidth + buffer;       // right boundary
+
+    // screenX for a card = virtI*overlapStep + offset
+    const entries = [];
+    for (let i = 0; i < TOTAL; i++) {
+      const x = i * overlapStep + offset;
+      // simple visibility check
+      if (x + itemWidth > minX && x < maxX) {
+        entries.push({ i, x });
+      }
+    }
+
+    // Order left → right so rightmost gets highest z
+    entries.sort((a, b) => a.x - b.x);
+    entries.forEach((e, idx) => map.set(e.i, idx)); // 0..k-1
+
+    return map;
+  }, [TOTAL, overlapStep, itemWidth, offset, vpWidth]);
+
   const resolveZIndex = (virtI) => {
-    const realI = virtI % N;
-    if (hoveredIndex === virtI) return 3000;     // hover always on top
-    const dist = circDist(realI, activeReal);   // 0 for active, grows outward
-    const base = 2000;                          // center z for active
-    const step = 20;                            // bigger = stronger separation
-    return base - dist * step;
+    if (hoveredIndex === virtI) return 4000;      // hover wins
+    const order = visibleOrder.get(virtI);
+    // Base ensures we sit above backgrounds & below arrow buttons (z-[3100])
+    // Rightmost (largest order) will be on top.
+    return 2000 + (order ?? 0);
   };
-  // -----------------------------------------------------------------------
+  // ------------------------------------------------------------
 
   const getItemAt = (virtI) => items[virtI % N];
 
-  // Card-level tap detection: pointerdown + pointerup within small movement
+  // Card-level tap detection (robust desktop clicks)
   const onCardPointerDown = (virtI) => (e) => {
     tap.current = {
       virtI,
       x: e.clientX ?? (e.touches && e.touches[0]?.clientX) ?? 0,
       y: e.clientY ?? (e.touches && e.touches[0]?.clientY) ?? 0,
     };
-    // bring this card above neighbors during press
     setHoveredIndex(virtI);
   };
 
   const onCardPointerUp = (item, virtI) => (e) => {
-    // restore hover after short delay (so the modal can open on top if it relies on focus)
     setTimeout(() => setHoveredIndex(null), 0);
-
-    // if the parent considered this a drag, do nothing
     if (drag.current.captured && drag.current.moved) return;
 
     const upX = e.clientX ?? (e.touches && e.touches[0]?.clientX) ?? 0;
     const upY = e.clientY ?? (e.touches && e.touches[0]?.clientY) ?? 0;
     const dx = Math.abs(upX - tap.current.x);
     const dy = Math.abs(upY - tap.current.y);
-
-    // must be same card and small movement to count as a tap
     if (tap.current.virtI !== virtI) return;
     if (dx > clickThreshold || dy > clickThreshold) return;
 
     const realI = virtI % N;
-
-    // Defer to next tick so any parent pointerup/endDrag finishes first
-    requestAnimationFrame(() => {
-      onItemClick?.(item, realI);
-    });
+    requestAnimationFrame(() => onItemClick?.(item, realI));
   };
 
   // Keyboard navigation
@@ -270,6 +288,7 @@ export default function OverlapCarousel({
 
       {/* viewport (transform-based; no native horizontal scroll) */}
       <div
+        ref={viewportRef}
         className="relative w-full h-full overflow-hidden select-none touch-pan-y"
         tabIndex={0}
         role="group"
@@ -305,7 +324,6 @@ export default function OverlapCarousel({
                   transform:
                     hoveredIndex === virtI ? "translateY(-4px) scale(1.02)" : "none",
                 }}
-                // Accessibility: allow keyboard "Enter"/"Space" to activate
                 role="button"
                 tabIndex={0}
                 onKeyDown={(e) => {
@@ -315,7 +333,6 @@ export default function OverlapCarousel({
                     onItemClick?.(item, realI);
                   }
                 }}
-                // Card-level tap detection
                 onPointerDown={onCardPointerDown(virtI)}
                 onPointerUp={onCardPointerUp(item, virtI)}
                 onMouseEnter={() => setHoveredIndex(virtI)}
