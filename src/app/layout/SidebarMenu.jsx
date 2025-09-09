@@ -20,7 +20,7 @@ export default function SidebarMenu({ children, expanded, onToggle }) {
 
   // Mobile (default): ~110px. On sm+ keep your old 18rem (w-72) and min-w-40.
   
-  const expandedClasses = isMinScreen ? "w-72 min-w-40" : "w-110 min-w-110";
+  const expandedClasses = isMinScreen ? "w-72 min-w-80" : "w-110 min-w-110";
   const collapsedClasses = "w-0 min-w-0";
 
   const base =
@@ -40,7 +40,7 @@ export default function SidebarMenu({ children, expanded, onToggle }) {
           {expanded ? <ChevronLeft size={18} /> : <ChevronRight size={18} />}
         </button>
 
-        <div className="mt-15 p-4 m-10">
+        <div className="mt-15 p-4 m-5">
           <AddDeck />
           <ShowDecks />
         </div>

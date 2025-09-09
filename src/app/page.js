@@ -38,7 +38,9 @@ export default function Home() {
             {/* Right: Cards panel fills remaining space */}
             <section className="flex-1 min-w-0 border border-bd rounded">
               <Suspense fallback={<div className="p-4 text-sm text-neutral-400">Loading deck…</div>}>
-                <DeckQueryPanel />
+                <div className={`${expanded ? "w-[calc(100vw-370px)]" : "w-[calc(100vw-50px)]"} h-full overflow-hidden`}>
+                  <DeckQueryPanel />
+                </div>
               </Suspense>
             </section>
           </SidebarMenu>
