@@ -26,7 +26,7 @@ export default function SidebarMenu({ children, expanded, onToggle }) {
   const base =
     "h-screen border-r border-bd flex flex-col bg-neutral-800 text-white overflow-y-auto transition-[width] duration-300";
   const width = expanded ? expandedClasses : collapsedClasses;
-
+  const childrenWidth = isMinScreen ? "":"w-[calc(100%-110px)]";
   return (
     <div className="flex min-h-screen w-full">
       <aside id="app-sidebar" className={`${base} ${width}`}>
@@ -40,9 +40,11 @@ export default function SidebarMenu({ children, expanded, onToggle }) {
           {expanded ? <ChevronLeft size={18} /> : <ChevronRight size={18} />}
         </button>
 
-        <div className="mt-15 p-4 m-5">
-          <AddDeck />
-          <ShowDecks />
+        <div className={`${childrenWidth} mt-16 p-4 `}>
+          <div className="sm:justify-center flex flex-col gap-4">
+            <AddDeck />
+            <ShowDecks />
+          </div>
         </div>
       </aside>
 
