@@ -1,22 +1,39 @@
+// src/components/cards/ShowCards.jsx
 "use client";
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import Modal from "@/components/layout/Modal";
 import AddCard from "@/components/cards/AddCard";
 import { getDeckByIdCached, getCardsByDeckCached } from "@/data/card";
 import OverlapCarousel from "@/components/layout/OverlapCarousel";
 import Card from "./Card";
 import RefreshBTN from "../layout/RefreshBTN";
+import SearchCards from "../searchCards/SearchCards";
 
 export default function ShowCards({ deck }) {
-  const [open, setOpen] = useState(false);
   const deckId = deck || null;
+
+  // UI / modal state
+  const [open, setOpen] = useState(false); // "Add card" modal
+  const [carouselLocked, setCarouselLocked] = useState(false); // disable carousel while any card modal is open
+
+  // Data
   const [deckInfo, setDeckInfo] = useState(null);
   const [cards, setCards] = useState([]);
 
-  
-  // re-fetch trigger after closing Add modal
+  // Re-fetch trigger after adding/editing/deleting
   const [refreshKey, setRefreshKey] = useState(0);
+
+  // Carousel control (jump to selected)
+  const [carouselKey, setCarouselKey] = useState(0);
+  const [initialIndex, setInitialIndex] = useState(0);
+  const carouselAnchorRef = useRef(null);
+
+  // Memoized items
+  const items = useMemo(
+    () => (Array.isArray(cards) ? cards.filter((c) => c && typeof c === "object") : []),
+    [cards]
+  );
 
   // Deck info (cache-first)
   useEffect(() => {
@@ -28,9 +45,7 @@ export default function ShowCards({ deck }) {
         console.error("Failed to load deck:", err);
         !cancelled && setDeckInfo(null);
       });
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [deckId]);
 
   // Cards (cache-first)
@@ -40,34 +55,63 @@ export default function ShowCards({ deck }) {
     (async () => {
       try {
         const cardList = await getCardsByDeckCached(deckId);
-        if (!cancelled) setCards(cardList);
+        if (!cancelled) setCards(Array.isArray(cardList) ? cardList : []);
       } catch (err) {
         console.error("Failed to load cards:", err);
         if (!cancelled) setCards([]);
       }
     })();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [deckId, refreshKey]);
 
   const handleCloseAddModal = () => {
     setOpen(false);
-    setRefreshKey((k) => k + 1); // refresh list after adding
+    setRefreshKey((k) => k + 1);
   };
 
- const renderItem = (item, index) => (
-  <Card
-    key={item.id ?? index}
-    deckId={deckId}
-    card={item}
-    height={440}
-    onUpdated={() => setRefreshKey(k => k + 1)}
-    onDeleted={() => setRefreshKey(k => k + 1)}
-  />
-);
+  // ---- Search selection -> jump carousel to that card ----
+  const handleSelect = useCallback(
+    (selected) => {
+      if (!selected) return;
+      const idxById = items.findIndex((c) => c?.id && c.id === selected.id);
+      const idx =
+        idxById >= 0
+          ? idxById
+          : items.findIndex(
+              (c) =>
+                c &&
+                c.title === selected.title &&
+                c.summary === selected.summary
+            );
+      const target = idx >= 0 ? idx : 0;
 
+      setInitialIndex(target);
+      // force a re-mount so initialIndex is applied immediately
+      setCarouselKey((k) => k + 1);
 
+      // scroll to carousel
+      requestAnimationFrame(() => {
+        carouselAnchorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    },
+    [items]
+  );
+
+  // Render each card tile
+  const renderItem = useCallback(
+    (item, index) => (
+      <Card
+        key={item.id ?? index}
+        deckId={deckId}
+        card={item}
+        height={440}
+        onUpdated={() => setRefreshKey((k) => k + 1)}
+        onDeleted={() => setRefreshKey((k) => k + 1)}
+        onModalStateChange={setCarouselLocked} // lock carousel while modal open
+      />
+    ),
+    [deckId]
+  );
 
   return (
     <>
@@ -77,16 +121,14 @@ export default function ShowCards({ deck }) {
             {deckInfo?.title ?? "Decks Page"}
           </h1>
 
-            <RefreshBTN
-              deckId={deckId}
-              onRefreshed={({ deck, cards }) => {
-                if (deck) setDeckInfo(deck);
-                if (Array.isArray(cards)) setCards(cards);
-                // optional: also bump refreshKey if you want to force a re-read elsewhere
-                // setRefreshKey(k => k + 1);
-              }}
-            />
-          </div>
+          <RefreshBTN
+            deckId={deckId}
+            onRefreshed={({ deck, cards }) => {
+              if (deck) setDeckInfo(deck);
+              if (Array.isArray(cards)) setCards(cards);
+            }}
+          />
+        </div>
 
         <button
           onClick={() => setOpen(true)}
@@ -101,32 +143,28 @@ export default function ShowCards({ deck }) {
         </Modal>
       </div>
 
-      <div className="p-4">
-        {cards.length === 0 ? (
+      <div className="p-4 space-y-4">
+        <SearchCards
+          cards={items}
+          onSelect={handleSelect}
+          // remoteSearch={async (q) => { /* Firestore search later */ }}
+        />
+      </div>
+
+      <div ref={carouselAnchorRef} className="p-4">
+        {items.length === 0 ? (
           <p className="text-gray-500">No cards in this deck.</p>
         ) : (
           <OverlapCarousel
-            items={cards}
+            key={`carousel-${carouselKey}-${deckId}`}
+            items={items}
             renderItem={renderItem}
             itemWidth={320}
             overlapStep={220}
             height={520}
             showArrows
-            enableModal
-            getModalTitle={(item) => item.title || "Card Details"}
-            renderModalContent={(item) => (
-              <div className="space-y-2">
-                {item.date && (
-                  <div className="text-xs text-gray-500">{item.date}</div>
-                )}
-                <div
-                  className="prose max-w-none tiptap-content"
-                  dangerouslySetInnerHTML={{
-                    __html: item.content || "<p><em>No content</em></p>",
-                  }}
-                />
-              </div>
-            )}
+            initialIndex={initialIndex}
+            interactionsDisabled={carouselLocked} // if your OverlapCarousel supports this
             className="bg-neutral-900/80 rounded-2xl border"
           />
         )}
