@@ -156,17 +156,22 @@ export default function ShowCards({ deck }) {
           <p className="text-gray-500">No cards in this deck.</p>
         ) : (
           <OverlapCarousel
-            key={`carousel-${carouselKey}-${deckId}`}
-            items={items}
-            renderItem={renderItem}
-            itemWidth={320}
-            overlapStep={220}
-            height={520}
-            showArrows
-            initialIndex={initialIndex}
-            interactionsDisabled={carouselLocked} // if your OverlapCarousel supports this
-            className="bg-neutral-900/80 rounded-2xl border"
+            items={cards}
+            renderItem={(item, index) => (
+              <Card
+                key={item.id ?? index}
+                deckId={deckId}
+                card={item}
+                index={index}
+                total={cards.length}   // optional; shows "3 / N"
+                height={440}
+                onUpdated={() => setRefreshKey((k) => k + 1)}
+                onDeleted={() => setRefreshKey((k) => k + 1)}
+              />
+            )}
+            /* ...other props... */
           />
+
         )}
       </div>
     </>
