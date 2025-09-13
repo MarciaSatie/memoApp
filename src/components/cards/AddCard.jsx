@@ -1,5 +1,7 @@
+// src/components/cards/AddCard.jsx
 "use client";
-import { useState, useEffect } from "react";
+
+import { useState, useEffect, useMemo } from "react";
 import dynamic from "next/dynamic";
 const CodeMirror = dynamic(
   () => import("@uiw/react-codemirror").then((m) => m.default),
@@ -31,6 +33,25 @@ function getCurrentDate() {
   return date.toISOString().split("T")[0]; // YYYY-MM-DD
 }
 
+// Split on comma/semicolon/newline; trim; dedupe case-insensitively
+function parseKeywords(raw) {
+  if (!raw) return [];
+  const parts = raw
+    .split(/[,\n;]+/g)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const seen = new Set();
+  const out = [];
+  for (const p of parts) {
+    const k = p.toLowerCase();
+    if (!seen.has(k)) {
+      seen.add(k);
+      out.push(p);
+    }
+  }
+  return out;
+}
+
 export default function AddCard({ deckId }) {
   const [title, setTitle] = useState("");
   const [date, setDate] = useState(getCurrentDate());
@@ -39,6 +60,10 @@ export default function AddCard({ deckId }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [editorJSON, setEditorJSON] = useState(null);
+
+  // NEW: keywords input (comma/semicolon/newline separated)
+  const [keywordsText, setKeywordsText] = useState("");
+  const keywords = useMemo(() => parseKeywords(keywordsText), [keywordsText]);
 
   async function handleSave() {
     setError("");
@@ -55,16 +80,18 @@ export default function AddCard({ deckId }) {
     setSaving(true);
     try {
       const contentToSave = await prettifyHtml(content || "");
-      // ✅ delegate to helper (keeps Firestore logic out of component)
-      const newId = await addCard(deckId, {
+      const payload = {
         title: title.trim(),
         content: contentToSave,
         json: editorJSON ?? null,
         date: date || getCurrentDate(),
         contentClasses:
           "tiptap-content prose prose-slate max-w-none leading-relaxed",
-      });
+        // ✅ NEW: save keywords array
+        keywords, // e.g., ["react", "performance", "hooks"]
+      };
 
+      const newId = await addCard(deckId, payload);
       console.log("Card saved successfully, id:", newId);
 
       // Reset form
@@ -72,6 +99,7 @@ export default function AddCard({ deckId }) {
       setDate(getCurrentDate());
       setContent("");
       setEditorJSON(null);
+      setKeywordsText("");
     } catch (e) {
       console.error(e);
       setError("Failed to save card");
@@ -91,7 +119,7 @@ export default function AddCard({ deckId }) {
   async function formatHtmlNow() {
     if (!content) return;
     const pretty = await prettifyHtml(content);
-    setContent(pretty);
+    setContent(prety);
   }
 
   return (
@@ -110,6 +138,34 @@ export default function AddCard({ deckId }) {
           onChange={(e) => setDate(e.target.value)}
           className="border rounded-xl px-3 py-2 bg-white text-gray-700"
         />
+      </div>
+
+      {/* NEW: Keywords input */}
+      <div className="space-y-2">
+        <label className="block text-sm font-medium text-gray-700">
+          Keywords
+          <span className="ml-2 text-xs text-gray-500">
+            (separate with comma, semicolon, or newline)
+          </span>
+        </label>
+        <textarea
+          value={keywordsText}
+          onChange={(e) => setKeywordsText(e.target.value)}
+          placeholder="e.g. react, performance; hooks"
+          className="w-full min-h-[72px] rounded-xl border bg-white text-gray-700 px-3 py-2"
+        />
+        {keywords.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {keywords.map((kw, i) => (
+              <span
+                key={`${kw}-${i}`}
+                className="inline-flex items-center rounded-full border border-neutral-300 bg-neutral-50 px-2 py-0.5 text-xs text-neutral-700"
+              >
+                {kw}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
 
       <div>

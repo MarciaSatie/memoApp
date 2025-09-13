@@ -15,13 +15,17 @@ import React, { useEffect, useMemo, useRef, useState, useCallback } from "react"
  * - debounceMs?: number (default 200)
  * - minChars?: number (default 1)
  * - maxResults?: number (default 50)
+ *
+ * Notes:
+ * - Two checkboxes let you choose which fields to search: Title and/or Keywords.
+ * - Summary is NOT searched anymore (kept for display only).
  */
 export default function SearchCards({
   cards = [],
   onSelect,
-  remoteSearch,           // when provided + query length >= minChars, we call it
+  remoteSearch,
   initialQuery = "",
-  placeholder = "Search cards by title or keywords…",
+  placeholder = "Search cards…",
   className = "",
   debounceMs = 200,
   minChars = 1,
@@ -33,30 +37,55 @@ export default function SearchCards({
   const [error, setError] = useState("");
   const [activeIndex, setActiveIndex] = useState(-1);
 
-  // Normalize and token helpers
-  const norm = useCallback((s) => (s ?? "")
-    .toString()
-    .normalize("NFD")
-    .replace(/\p{Diacritic}/gu, "")
-    .toLowerCase()
-  , []);
+  // NEW: which fields to search
+  const [searchTitle, setSearchTitle] = useState(true);
+  const [searchKeywords, setSearchKeywords] = useState(true);
 
-  const tokenize = useCallback((s) => {
-    return norm(s)
-      .split(/[\s,;]+/g)
-      .filter(Boolean);
-  }, [norm]);
+  const ensureAtLeastOne = useCallback((nextTitle, nextKeywords) => {
+    // Prevent both from being unchecked
+    if (!nextTitle && !nextKeywords) {
+      return { title: true, keywords: false }; // default back to title
+    }
+    return { title: nextTitle, keywords: nextKeywords };
+  }, []);
+
+  const toggleTitle = () => {
+    const next = ensureAtLeastOne(!searchTitle, searchKeywords);
+    setSearchTitle(next.title);
+    setSearchKeywords(next.keywords);
+  };
+  const toggleKeywords = () => {
+    const next = ensureAtLeastOne(searchTitle, !searchKeywords);
+    setSearchTitle(next.title);
+    setSearchKeywords(next.keywords);
+  };
+
+  // Normalize helpers
+  const norm = useCallback(
+    (s) =>
+      (s ?? "")
+        .toString()
+        .normalize("NFD")
+        .replace(/\p{Diacritic}/gu, "")
+        .toLowerCase(),
+    []
+  );
+
+  const tokenize = useCallback(
+    (s) => norm(s).split(/[\s,;]+/g).filter(Boolean),
+    [norm]
+  );
 
   const buildRegex = useCallback((tokens) => {
     if (!tokens.length) return null;
-    const escaped = tokens.map(t => escapeRegExp(t));
+    const escaped = tokens.map((t) => escapeRegExp(t));
     return new RegExp(`(${escaped.join("|")})`, "gi");
   }, []);
 
   // Debounced query
   const debouncedQuery = useDebouncedValue(query, debounceMs);
 
-  // Perform search when query/cards change
+  // Perform search when query/cards/toggles change
   useEffect(() => {
     let cancelled = false;
 
@@ -78,45 +107,48 @@ export default function SearchCards({
         if (!c || typeof c !== "object") continue;
 
         const t = norm(c.title);
-        const s = norm(c.summary);
         const kws = Array.isArray(c.keywords) ? c.keywords.map(norm) : [];
 
-        // Require ALL tokens to appear in ANY field (AND logic)
-        const haystack = [t, s, ...kws].join(" ");
-        const allPresent = toks.every(tok => haystack.includes(tok));
+        // Build haystack from selected fields only
+        const hayParts = [];
+        if (searchTitle) hayParts.push(t);
+        if (searchKeywords) hayParts.push(...kws);
+        const haystack = hayParts.join(" ");
+
+        // Require ALL tokens (AND) to appear in the selected fields
+        const allPresent = toks.every((tok) => haystack.includes(tok));
         if (!allPresent) continue;
 
-        // Simple scoring: title exact > title token > keyword > summary
+        // Scoring: Title (if enabled) stronger than Keywords (if enabled)
         let score = 0;
-        if (t) {
+        if (searchTitle && t) {
           if (t === norm(debouncedQuery)) score += 100;
           for (const tok of toks) {
             if (t.startsWith(tok)) score += 20;
             if (t.includes(tok)) score += 10;
           }
         }
-        for (const kw of kws) {
-          for (const tok of toks) {
-            if (kw === tok) score += 15;
-            else if (kw.includes(tok)) score += 8;
-          }
-        }
-        if (s) {
-          for (const tok of toks) {
-            if (s.includes(tok)) score += 2;
+        if (searchKeywords && kws.length) {
+          for (const kw of kws) {
+            for (const tok of toks) {
+              if (kw === tok) score += 15;
+              else if (kw.includes(tok)) score += 8;
+            }
           }
         }
 
-        // Build highlights for UI
+        // Build highlights for UI (only for selected fields)
         scored.push({
           card: c,
           score,
           hits: {
-            title: rx ? highlightParts(c.title ?? "", rx) : null,
-            summary: rx ? highlightParts(c.summary ?? "", rx) : null,
-            keywords: Array.isArray(c.keywords)
-              ? c.keywords.map((kw) => (rx ? highlightParts(kw, rx) : null))
-              : [],
+            title: searchTitle && rx ? highlightParts(c.title ?? "", rx) : null,
+            // keep summary ONLY for display; we don't highlight it because we don't search it
+            summary: null,
+            keywords:
+              searchKeywords && Array.isArray(c.keywords)
+                ? c.keywords.map((kw) => (rx ? highlightParts(kw, rx) : null))
+                : [],
           },
         });
       }
@@ -143,21 +175,55 @@ export default function SearchCards({
         setLoading(true);
         setError("");
         const remote = await remoteSearch(q);
-        // Reuse client highlight for display
         const toks = tokenize(q);
         const rx = buildRegex(toks);
 
-        const mapped = (Array.isArray(remote) ? remote : []).map((c) => ({
-          card: c,
-          score: 0, // server decided order
-          hits: {
-            title: rx ? highlightParts(c?.title ?? "", rx) : null,
-            summary: rx ? highlightParts(c?.summary ?? "", rx) : null,
-            keywords: Array.isArray(c?.keywords)
-              ? c.keywords.map((kw) => (rx ? highlightParts(kw, rx) : null))
-              : [],
-          },
-        }));
+        // Client-side filter + highlight respecting toggles
+        const mapped = (Array.isArray(remote) ? remote : [])
+          .map((c) => {
+            const t = norm(c?.title);
+            const kws = Array.isArray(c?.keywords) ? c.keywords.map(norm) : [];
+            const parts = [];
+            if (searchTitle) parts.push(t);
+            if (searchKeywords) parts.push(...kws);
+            const haystack = parts.join(" ");
+            const allPresent = toks.every((tok) => haystack.includes(tok));
+            if (!allPresent) return null;
+
+            // same scoring as client
+            let score = 0;
+            if (searchTitle && t) {
+              if (t === norm(q)) score += 100;
+              for (const tok of toks) {
+                if (t.startsWith(tok)) score += 20;
+                if (t.includes(tok)) score += 10;
+              }
+            }
+            if (searchKeywords && kws.length) {
+              for (const kw of kws) {
+                for (const tok of toks) {
+                  if (kw === tok) score += 15;
+                  else if (kw.includes(tok)) score += 8;
+                }
+              }
+            }
+
+            return {
+              card: c,
+              score,
+              hits: {
+                title: searchTitle && rx ? highlightParts(c?.title ?? "", rx) : null,
+                summary: null,
+                keywords:
+                  searchKeywords && Array.isArray(c?.keywords)
+                    ? c.keywords.map((kw) => (rx ? highlightParts(kw, rx) : null))
+                    : [],
+              },
+            };
+          })
+          .filter(Boolean);
+
+        mapped.sort((a, b) => b.score - a.score);
         if (!cancelled) {
           setResults(mapped.slice(0, maxResults));
           setActiveIndex(mapped.length ? 0 : -1);
@@ -172,8 +238,21 @@ export default function SearchCards({
     if (typeof remoteSearch === "function") doRemoteSearch();
     else doClientSearch();
 
-    return () => { cancelled = true; };
-  }, [cards, debouncedQuery, minChars, maxResults, tokenize, norm, buildRegex, remoteSearch]);
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    cards,
+    debouncedQuery,
+    minChars,
+    maxResults,
+    tokenize,
+    norm,
+    buildRegex,
+    remoteSearch,
+    searchTitle,
+    searchKeywords,
+  ]);
 
   // Keyboard nav
   const onKeyDown = (e) => {
@@ -195,6 +274,28 @@ export default function SearchCards({
 
   return (
     <div className={`w-full ${className}`}>
+      {/* NEW: field toggles */}
+      <div className="mb-2 flex items-center gap-4 text-sm text-neutral-200">
+        <label className="inline-flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            className="h-4 w-4 accent-neutral-400"
+            checked={searchTitle}
+            onChange={toggleTitle}
+          />
+          <span>Title</span>
+        </label>
+        <label className="inline-flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            className="h-4 w-4 accent-neutral-400"
+            checked={searchKeywords}
+            onChange={toggleKeywords}
+          />
+          <span>Keywords</span>
+        </label>
+      </div>
+
       {/* Input */}
       <div className="relative">
         <input
@@ -202,7 +303,13 @@ export default function SearchCards({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={onKeyDown}
-          placeholder={placeholder}
+          placeholder={
+            searchTitle && searchKeywords
+              ? "Search by title or keywords…"
+              : searchTitle
+              ? "Search by title…"
+              : "Search by keywords…"
+          }
           className="w-full rounded-lg border border-neutral-600 bg-neutral-800 text-white px-10 py-2 outline-none focus:border-neutral-400"
           aria-label="Search cards"
         />
@@ -248,9 +355,10 @@ export default function SearchCards({
                       <div className="font-medium text-white truncate">
                         {renderHighlighted(r.hits.title, c.title ?? "Untitled")}
                       </div>
+                      {/* Keep summary for display only (not searched) */}
                       {c.summary ? (
                         <div className="mt-1 text-sm text-neutral-300 line-clamp-2">
-                          {renderHighlighted(r.hits.summary, c.summary)}
+                          {c.summary}
                         </div>
                       ) : null}
                       {Array.isArray(c.keywords) && c.keywords.length > 0 && (
@@ -260,7 +368,10 @@ export default function SearchCards({
                               key={`${kw}-${kidx}`}
                               className="rounded-full border border-neutral-600 px-2 py-0.5 text-xs text-neutral-300"
                             >
-                              {renderHighlighted(r.hits.keywords?.[kidx], kw)}
+                              {renderHighlighted(
+                                r.hits.keywords?.[kidx],
+                                kw
+                              )}
                             </span>
                           ))}
                         </div>

@@ -1,7 +1,7 @@
 // src/components/cards/EditCard.jsx
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import dynamic from "next/dynamic";
 const CodeMirror = dynamic(
   () => import("@uiw/react-codemirror").then((m) => m.default),
@@ -28,9 +28,28 @@ async function prettifyHtml(source) {
   }
 }
 
+// Split on comma/semicolon/newline; trim; dedupe case-insensitively
+function parseKeywords(raw) {
+  if (!raw) return [];
+  const parts = raw
+    .split(/[,\n;]+/g)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const seen = new Set();
+  const out = [];
+  for (const p of parts) {
+    const k = p.toLowerCase();
+    if (!seen.has(k)) {
+      seen.add(k);
+      out.push(p);
+    }
+  }
+  return out;
+}
+
 export default function EditCard({
   deckId,
-  card,                 // { id, title, content, json, date, contentClasses? }
+  card,                 // { id, title, content, json, date, keywords?: string[] }
   onSaved,              // (cardId) => void
   onCancel,             // () => void
 }) {
@@ -38,6 +57,12 @@ export default function EditCard({
   const [date, setDate] = useState(card?.date || "");
   const [content, setContent] = useState(card?.content || "");
   const [editorJSON, setEditorJSON] = useState(card?.json ?? null);
+
+  // NEW: keywords input (comma/semicolon/newline separated)
+  const [keywordsText, setKeywordsText] = useState(
+    Array.isArray(card?.keywords) ? card.keywords.join(", ") : ""
+  );
+  const keywords = useMemo(() => parseKeywords(keywordsText), [keywordsText]);
 
   const [isHtmlMode, setIsHtmlMode] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -49,6 +74,7 @@ export default function EditCard({
     setDate(card?.date || "");
     setContent(card?.content || "");
     setEditorJSON(card?.json ?? null);
+    setKeywordsText(Array.isArray(card?.keywords) ? card.keywords.join(", ") : "");
     setError("");
     setIsHtmlMode(false);
   }, [card?.id]);
@@ -87,7 +113,8 @@ export default function EditCard({
         date: date || null,
         content: contentToSave,
         json: editorJSON ?? null,
-        // keep existing contentClasses if you use it; omit here to leave unchanged
+        keywords, // ✅ save keywords array
+        // (omit contentClasses to leave unchanged, unless you want to update it here)
       });
       onSaved?.(card.id);
     } catch (e) {
@@ -114,6 +141,34 @@ export default function EditCard({
           onChange={(e) => setDate(e.target.value)}
           className="border rounded-xl px-3 py-2 bg-white text-gray-700"
         />
+      </div>
+
+      {/* NEW: Keywords editor */}
+      <div className="space-y-2">
+        <label className="block text-sm font-medium text-gray-700">
+          Keywords
+          <span className="ml-2 text-xs text-gray-500">
+            (separate with comma, semicolon, or newline)
+          </span>
+        </label>
+        <textarea
+          value={keywordsText}
+          onChange={(e) => setKeywordsText(e.target.value)}
+          placeholder="e.g. react, performance; hooks"
+          className="w-full min-h-[72px] rounded-xl border bg-white text-gray-700 px-3 py-2"
+        />
+        {keywords.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {keywords.map((kw, i) => (
+              <span
+                key={`${kw}-${i}`}
+                className="inline-flex items-center rounded-full border border-neutral-300 bg-neutral-50 px-2 py-0.5 text-xs text-neutral-700"
+              >
+                {kw}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
 
       <div>
