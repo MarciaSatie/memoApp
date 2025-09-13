@@ -7,7 +7,8 @@ import { Pencil, Trash2, Star } from "lucide-react";
 import { useRouter } from "next/navigation";
 import RefreshDecks from "../layout/RefreshDecks";
 
-import UpdateDeck from "./UpdateDeck";
+import UpdateDeck from "./UpdateDeck"; // default import
+
 
 export default function ShowDecks() {
   const { user } = useAuth();

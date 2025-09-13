@@ -11,7 +11,17 @@ import { html } from "@codemirror/lang-html";
 import { oneDark } from "@codemirror/theme-one-dark";
 import TipTapEditor from "../editor/TipTapEditor";
 import prettier from "prettier/standalone";
-import { updateCard } from "@/data/card";
+
+// deck + card data helpers
+import {
+  updateCard,
+  addCard,
+  deleteCard,
+  updateCardInSubdeck,
+  addCardToSubdeck,
+  deleteCardInSubdeck,
+} from "@/data/card";
+import { getSubdecksCached } from "@/data/decks";
 
 /* ---------------- Helpers ---------------- */
 async function prettifyHtml(source) {
@@ -49,24 +59,52 @@ function parseKeywords(raw) {
 
 export default function EditCard({
   deckId,
-  card,                 // { id, title, content, json, date, keywords?: string[] }
+  card,                 // { id, title, content, json, date, keywords?: string[], subdeckId?: string|null }
   onSaved,              // (cardId) => void
   onCancel,             // () => void
 }) {
+  // content fields
   const [title, setTitle] = useState(card?.title || "");
   const [date, setDate] = useState(card?.date || "");
   const [content, setContent] = useState(card?.content || "");
   const [editorJSON, setEditorJSON] = useState(card?.json ?? null);
 
-  // NEW: keywords input (comma/semicolon/newline separated)
+  // keywords
   const [keywordsText, setKeywordsText] = useState(
     Array.isArray(card?.keywords) ? card.keywords.join(", ") : ""
   );
   const keywords = useMemo(() => parseKeywords(keywordsText), [keywordsText]);
 
+  // subdeck list + selection
+  const [subdecks, setSubdecks] = useState([]); // [{id, name}]
+  const [selectedSubdeckId, setSelectedSubdeckId] = useState(card?.subdeckId ?? null);
+
+  // misc
   const [isHtmlMode, setIsHtmlMode] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+
+  // Load subdecks for dropdown (once per deckId)
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!deckId) return;
+      try {
+        const list = await getSubdecksCached(deckId);
+        if (cancelled) return;
+        const clean = (Array.isArray(list) ? list : []).map((s) => ({
+          id: s.id,
+          name: s.name || "Untitled",
+        }));
+        setSubdecks(clean);
+      } catch (e) {
+        if (!cancelled) console.warn("Failed to load subdecks:", e?.message || e);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [deckId]);
 
   // Sync local state if a different card is passed in
   useEffect(() => {
@@ -75,11 +113,12 @@ export default function EditCard({
     setContent(card?.content || "");
     setEditorJSON(card?.json ?? null);
     setKeywordsText(Array.isArray(card?.keywords) ? card.keywords.join(", ") : "");
+    setSelectedSubdeckId(card?.subdeckId ?? null);
     setError("");
     setIsHtmlMode(false);
   }, [card?.id]);
 
-  // Prettify when switching into HTML mode (like AddCard)
+  // Prettify when switching into HTML mode
   useEffect(() => {
     if (!isHtmlMode || !content) return;
     (async () => {
@@ -108,18 +147,51 @@ export default function EditCard({
     setSaving(true);
     try {
       const contentToSave = isHtmlMode ? await prettifyHtml(content || "") : (content || "");
-      await updateCard(deckId, card.id, {
+      const payload = {
         title: title.trim(),
         date: date || null,
         content: contentToSave,
         json: editorJSON ?? null,
-        keywords, // ✅ save keywords array
-        // (omit contentClasses to leave unchanged, unless you want to update it here)
-      });
-      onSaved?.(card.id);
+        keywords, // save keywords array
+        // contentClasses: (omit to keep existing)
+      };
+
+      const oldSubdeckId = card?.subdeckId ?? null;
+      const newSubdeckId = selectedSubdeckId || null;
+
+      // (A) no location change -> simple update
+      if (oldSubdeckId === newSubdeckId) {
+        if (newSubdeckId) {
+          // still inside same subdeck
+          await updateCardInSubdeck(deckId, newSubdeckId, card.id, payload);
+        } else {
+          // still in main/root
+          await updateCard(deckId, card.id, payload);
+        }
+        onSaved?.(card.id);
+        return;
+      }
+
+      // (B) location changed -> move (create in new place, delete old)
+      let newId;
+      if (!oldSubdeckId && newSubdeckId) {
+        // main -> subdeck
+        newId = await addCardToSubdeck(deckId, newSubdeckId, payload);
+        await deleteCard(deckId, card.id);
+      } else if (oldSubdeckId && !newSubdeckId) {
+        // subdeck -> main
+        newId = await addCard(deckId, payload);
+        await deleteCardInSubdeck(deckId, oldSubdeckId, card.id);
+      } else {
+        // subdeck A -> subdeck B
+        newId = await addCardToSubdeck(deckId, newSubdeckId, payload);
+        await deleteCardInSubdeck(deckId, oldSubdeckId, card.id);
+      }
+
+      onSaved?.(newId || card.id);
     } catch (e) {
-      console.error("❌ updateCard failed:", e?.code, e?.message, e);
-      setError(e?.message || "Failed to update card");
+      console.error("❌ save/move failed:", e?.code, e?.message, e);
+      setError(e?.message || "Failed to save card");
     } finally {
       setSaving(false);
     }
@@ -143,7 +215,24 @@ export default function EditCard({
         />
       </div>
 
-      {/* NEW: Keywords editor */}
+      {/* NEW: Subdeck selector */}
+      <div className="space-y-1">
+        <label className="block text-sm font-medium text-gray-700">Subdeck</label>
+        <select
+          value={selectedSubdeckId ?? ""}
+          onChange={(e) => setSelectedSubdeckId(e.target.value || null)}
+          className="w-full rounded-xl border bg-white text-gray-700 px-3 py-2"
+        >
+          <option value="">Main deck</option>
+          {subdecks.map((sd) => (
+            <option key={sd.id} value={sd.id}>
+              {sd.name}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* Keywords editor */}
       <div className="space-y-2">
         <label className="block text-sm font-medium text-gray-700">
           Keywords
