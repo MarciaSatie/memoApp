@@ -23,8 +23,8 @@ export default function OverlapCarousel({
   loop = true,                // enable infinite loop
 }) {
   const N = items.length;
-  const canLoop = loop && N >= 2;
 
+  // Early empty state
   if (N === 0) {
     return (
       <div
@@ -41,22 +41,61 @@ export default function OverlapCarousel({
     const tag = el.tagName?.toLowerCase();
     return tag === "input" || tag === "textarea" || tag === "select";
   };
+  const clampInitial = (i) => Math.max(0, Math.min(i, N - 1));
   // -------------------------------------------
 
-  // Render 3 copies for infinite effect: [A | B | C]
-  const COPIES = canLoop ? 3 : 1;
-  const PAD = canLoop ? N : 0;           // middle block starts at index N
-  const TOTAL = N * COPIES;
-  const startVIndex = canLoop
-    ? PAD + Math.max(0, Math.min(initialIndex, N - 1))
-    : Math.max(0, Math.min(initialIndex, N - 1));
+  // Measure viewport width to know if all cards fit without scrolling
+  const viewportRef = useRef(null);
+  const [vpWidth, setVpWidth] = useState(0);
+  useEffect(() => {
+    const el = viewportRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      const r = entries[0]?.contentRect;
+      if (r) setVpWidth(Math.round(r.width));
+    });
+    ro.observe(el);
+    setVpWidth(el.clientWidth);
+    return () => ro.disconnect();
+  }, []);
+
+  // Width of a single full copy of the deck (same formula you had)
+  const copyWidth = useMemo(
+    () => (N - 1) * overlapStep + itemWidth + 40,
+    [N, overlapStep, itemWidth]
+  );
+
+  // Only loop/repeat if there are more cards than can be seen in the window
+  const scrollable = vpWidth > 0 && copyWidth > vpWidth;
+  const canLoop = loop && N >= 2 && scrollable;
+
+  // Virtual list geometry
+  const COPIES = canLoop ? 3 : 1;           // [A|B|C] or just [B]
+  const PAD = canLoop ? N : 0;              // middle block offset
+  const TOTAL = N * COPIES;                 // total virtual cards
   const lastV = TOTAL - 1;
+
+  // Initial visual index
+  const startVIndex = canLoop
+    ? PAD + clampInitial(initialIndex)
+    : clampInitial(initialIndex);
 
   // Visual state
   const [vIndex, setVIndex] = useState(startVIndex);      // virtual index [0..TOTAL-1]
   const [offset, setOffset] = useState(() => -startVIndex * overlapStep);
   const [hoveredIndex, setHoveredIndex] = useState(null);
   const [anim, setAnim] = useState(true);                 // transition on/off
+
+  // If canLoop/scrollable toggles (e.g., resize), reset to a sane position
+  useEffect(() => {
+    const nv = canLoop ? PAD + clampInitial(initialIndex) : clampInitial(initialIndex);
+    setAnim(false);
+    setVIndex(nv);
+    setOffset(-nv * overlapStep);
+    // re-enable animation on next tick
+    const t = setTimeout(() => setAnim(true), 0);
+    return () => clearTimeout(t);
+  }, [canLoop, PAD, initialIndex, overlapStep, N]);
 
   // Drag state (viewport)
   const drag = useRef({
@@ -74,31 +113,12 @@ export default function OverlapCarousel({
   const clickThreshold = 8;       // px to count as a click (tap)
   const dragAcquire = 8;          // px before the track starts following the pointer
 
-  // Measure viewport width to order only currently visible cards
-  const viewportRef = useRef(null);
-  const [vpWidth, setVpWidth] = useState(0);
-  useEffect(() => {
-    const el = viewportRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver((entries) => {
-      const r = entries[0]?.contentRect;
-      if (r) setVpWidth(Math.round(r.width));
-    });
-    ro.observe(el);
-    setVpWidth(el.clientWidth);
-    return () => ro.disconnect();
-  }, []);
-
-  // Track widths
-  const copyWidth = useMemo(
-    () => (N - 1) * overlapStep + itemWidth + 40,
-    [N, overlapStep, itemWidth]
-  );
+  // Track width depends on looping
   const trackWidth = useMemo(() => {
     if (!N) return 0;
     if (!canLoop) return copyWidth;
     return (TOTAL - 1) * overlapStep + itemWidth + 40;
-  }, [N, TOTAL, canLoop, copyWidth, overlapStep, itemWidth]);
+  }, [N, canLoop, copyWidth, TOTAL, overlapStep, itemWidth]);
 
   const clampV = useCallback((i) => Math.max(0, Math.min(i, lastV)), [lastV]);
 
@@ -129,24 +149,27 @@ export default function OverlapCarousel({
     }
   }, [canLoop, vIndex, PAD, N, overlapStep]);
 
-  // Buttons
+  // Buttons (disabled when not scrollable)
   const next = useCallback(() => {
+    if (!scrollable) return;
     snapToV(vIndex + 1, true);
     if (canLoop) setTimeout(normalizeIfNeeded, animationMs + 20);
-  }, [vIndex, snapToV, canLoop, normalizeIfNeeded, animationMs]);
+  }, [scrollable, vIndex, snapToV, canLoop, normalizeIfNeeded, animationMs]);
 
   const prev = useCallback(() => {
+    if (!scrollable) return;
     snapToV(vIndex - 1, true);
     if (canLoop) setTimeout(normalizeIfNeeded, animationMs + 20);
-  }, [vIndex, snapToV, canLoop, normalizeIfNeeded, animationMs]);
+  }, [scrollable, vIndex, snapToV, canLoop, normalizeIfNeeded, animationMs]);
 
   // Keep offset synced if vIndex changes
   useEffect(() => {
     setOffset(-vIndex * overlapStep);
   }, [vIndex, overlapStep]);
 
-  // -------------------- Drag handling (viewport; no pointer capture) --------------------
+  // -------------------- Drag handling (viewport; disabled if not scrollable) --------------------
   const onPointerDown = (e) => {
+    if (!scrollable) return;
     // left button only
     if (e.button !== undefined && e.button !== 0) return;
     const x = e.clientX ?? (e.touches && e.touches[0]?.clientX) ?? 0;
@@ -160,7 +183,7 @@ export default function OverlapCarousel({
   };
 
   const onPointerMove = (e) => {
-    if (!drag.current.active) return;
+    if (!scrollable || !drag.current.active) return;
     const x = e.clientX ?? (e.touches && e.touches[0]?.clientX) ?? 0;
     const dx = x - drag.current.startX;
 
@@ -181,7 +204,7 @@ export default function OverlapCarousel({
   };
 
   const endDrag = () => {
-    if (!drag.current.active) return;
+    if (!scrollable || !drag.current.active) return;
     const wasCaptured = drag.current.captured;
     drag.current.active = false;
 
@@ -200,10 +223,9 @@ export default function OverlapCarousel({
   const onPointerUp = () => endDrag();
   const onPointerCancel = () => endDrag();
   const onMouseLeave = () => endDrag();
-  // --------------------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------------------------
 
   // ---------- Z-INDEX ORDERING BY VISIBLE X-POSITION ----------
-  // Map of virtI -> order (left→right among currently visible cards)
   const visibleOrder = useMemo(() => {
     const map = new Map();
     const buffer = itemWidth; // count partially visible neighbors
@@ -249,6 +271,13 @@ export default function OverlapCarousel({
 
   const onCardPointerUp = (item, virtI) => (e) => {
     setTimeout(() => setHoveredIndex(null), 0);
+    if (!scrollable) {
+      // treat as click even without drag mode
+      const realI = virtI % N;
+      onItemClick?.(item, realI);
+      return;
+    }
+
     if (drag.current.captured && drag.current.moved) return;
 
     const upX = e.clientX ?? (e.touches && e.touches[0]?.clientX) ?? 0;
@@ -265,17 +294,19 @@ export default function OverlapCarousel({
 
   // Keyboard navigation (guard editable targets)
   const onViewportKeyDown = (e) => {
-    if (isEditableTarget(e.target)) return;
+    if (isEditableTarget(e.target) || !scrollable) return;
     if (e.key === "ArrowRight") { e.preventDefault(); next(); }
     else if (e.key === "ArrowLeft") { e.preventDefault(); prev(); }
   };
+
+  const showNav = showArrows && N > 1 && scrollable;
 
   return (
     <div
       className={`relative rounded-2xl border bg-gray-900 ${className}`}
       style={{ height }}
     >
-      {showArrows && N > 1 && (
+      {showNav && (
         <>
           <button
             type="button"
@@ -310,7 +341,7 @@ export default function OverlapCarousel({
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerCancel}
         onMouseLeave={onMouseLeave}
-        style={{ cursor: drag.current.active ? "grabbing" : "grab" }}
+        style={{ cursor: scrollable && drag.current.active ? "grabbing" : (scrollable ? "grab" : "default") }}
       >
         {/* track translated by `offset` */}
         <div
@@ -340,6 +371,7 @@ export default function OverlapCarousel({
                 onKeyDown={(e) => {
                   if (isEditableTarget(e.target)) return;
                   if (e.currentTarget !== e.target) return; // only when card itself is focused
+                  if (!scrollable) return;
                   if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault();
                     const realI = virtI % N;
