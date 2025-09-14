@@ -19,7 +19,7 @@ export default function ThemeSwitcher() {
   };
 
   return (
-    <div className="fixed top-2 left-2 flex gap-2">
+    <div className="absolute top-2 left-2 flex gap-2">
       {ThemeList.map((theme) => (
         <button
           key={theme.value}
