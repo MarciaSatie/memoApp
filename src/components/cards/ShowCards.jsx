@@ -16,7 +16,8 @@ import RefreshBTN from "../layout/RefreshBTN";
 import SearchCards from "../searchCards/SearchCards";
 
 export default function ShowCards({ deck }) {
-  const deckId = deck || null;
+  // ✅ Normalize: accept either a deck id string or a deck object
+  const deckId = typeof deck === "string" ? deck : deck?.id ?? null;
 
   // UI state
   const [open, setOpen] = useState(false);                 // "Add card" modal (root)

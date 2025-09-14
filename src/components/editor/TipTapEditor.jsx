@@ -1,7 +1,7 @@
 // src/components/editor/TipTapEditor.jsx
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Heading from "@tiptap/extension-heading";
@@ -14,39 +14,31 @@ import Placeholder from "@tiptap/extension-placeholder";
 
 import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
 import { createLowlight } from "lowlight";
-import { mergeAttributes } from "@tiptap/core";
 
-// (optional) register a few highlight.js languages
+// HLJS languages
 import javascript from "highlight.js/lib/languages/javascript";
 import typescript from "highlight.js/lib/languages/typescript";
-import xml from "highlight.js/lib/languages/xml"; // html/xml
+import xml from "highlight.js/lib/languages/xml";
 import css from "highlight.js/lib/languages/css";
 
-// Create lowlight instance and register languages
+// Create lowlight instance & register languages
 const lowlight = createLowlight();
 lowlight.register("javascript", javascript);
-lowlight.register("js", javascript); // alias
+lowlight.register("js", javascript);
 lowlight.register("typescript", typescript);
-lowlight.register("ts", typescript); // alias
+lowlight.register("ts", typescript);
 lowlight.register("html", xml);
 lowlight.register("xml", xml);
 lowlight.register("css", css);
 
-// ⬇️ Custom code block that puts `hljs` on <code> (HLJS themes target this)
-
-
- // keep your existing imports / lowlight registrations
-
+// Lowlight-backed code block with <code class="hljs language-xxx">
 const CodeBlockHL = CodeBlockLowlight.configure({
   lowlight,
   defaultLanguage: "javascript",
-  // makes <code class="hljs language-xxx">…
   languageClassPrefix: "hljs language-",
 });
 
-
-
-import { SquarePlus, ChevronDown } from "lucide-react";
+import { SquarePlus, ChevronDown, Smile } from "lucide-react";
 import {
   Bold as BoldIcon,
   Italic as ItalicIcon,
@@ -56,74 +48,122 @@ import {
   Heading1, Heading2, Heading3, Heading4, Heading5, Heading6,
   AlignLeft, AlignCenter, AlignRight, AlignJustify,
   Palette, X as ClearIcon, Link as LinkIcon, Link2Off as UnlinkIcon,
-  PaintBucket
+  PaintBucket,
 } from "lucide-react";
 
+/* ---------------- Emoji Button (no deps) ---------------- */
+const COMMON_EMOJIS = [
+  "😀","😁","😂","🤣","😊","😍","😘","😉","😎","🤔","🙃","🥳","🤯","😴","😭","🤝","👀",
+  "👍","👎","🙏","👏","💪","🔥","✨","🎉","✅","❌","💡","🧠","🛠️","🐛","🚀","⚠️","❗",
+  "📌","📝","📎","📚","💻","🧪","🔧","🔍","🔗","⏱️","📦","🗂️","🖼️","🔒","🔓"
+];
+
+function EmojiButton({ onPick, disabled }) {
+  const [open, setOpen] = useState(false);
+  const btnRef = useRef(null);
+  const popRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDocClick = (e) => {
+      if (!popRef.current || !btnRef.current) return;
+      if (
+        !popRef.current.contains(e.target) &&
+        !btnRef.current.contains(e.target)
+      ) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, [open]);
+
+  return (
+    <div className="relative">
+      <button
+        ref={btnRef}
+        type="button"
+        onClick={() => !disabled && setOpen((v) => !v)}
+        disabled={disabled}
+        className={`px-2.5 py-1.5 border rounded text-sm grid place-items-center bg-neutral-100 hover:bg-neutral-200 ${disabled ? "opacity-60 cursor-not-allowed" : ""}`}
+        title="Insert emoji (Win+.)"
+      >
+        <Smile size={14} />
+      </button>
+
+      {open && (
+        <div
+          ref={popRef}
+          className="absolute z-50 mt-2 w-60 rounded-lg border border-neutral-300 bg-white shadow-lg p-2"
+        >
+          <div className="grid grid-cols-8 gap-1 text-lg leading-none">
+            {COMMON_EMOJIS.map((e, i) => (
+              <button
+                key={`${e}-${i}`}
+                type="button"
+                className="h-8 w-8 grid place-items-center rounded hover:bg-neutral-100"
+                onClick={() => {
+                  onPick?.(e);
+                  setOpen(false);
+                }}
+                title={e}
+              >
+                {e}
+              </button>
+            ))}
+          </div>
+          <div className="mt-2 text-[11px] text-neutral-500 px-1">
+            Tip: On Windows press <kbd>Win</kbd>+<kbd>.</kbd> to open the system emoji panel.
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ---------------- Editor ---------------- */
 export default function TipTapEditor({
   value,
   onChange,
   disabled = false,
   className = "",
 }) {
-const editor = useEditor({
-  immediatelyRender: false,
-  editorProps: {
-    attributes: {
-      // Applied to the ProseMirror root. Removes harsh outline; pair with a
-      // focus ring on the wrapper using `focus-within:` utilities.
-      class: "tiptap prose-sm focus:outline-none outline-none",
+  const editor = useEditor({
+    immediatelyRender: false,
+    editorProps: {
+      attributes: {
+        class: "tiptap prose-sm focus:outline-none outline-none",
+      },
     },
-  },
-  extensions: [
-    // Use our Lowlight-backed code block
-    StarterKit.configure({ codeBlock: false }),
-    CodeBlockHL,
+    extensions: [
+      StarterKit.configure({ codeBlock: false }),
+      CodeBlockHL,
 
-    TextStyle,
-    Color,
-    Heading.configure({ levels: [1, 2, 3, 4, 5, 6] }),
-    TextAlign.configure({ types: ["heading", "paragraph"] }),
-    Link.configure({
-      openOnClick: false,
-      autolink: true,
-      linkOnPaste: true,
-      HTMLAttributes: { rel: "noopener noreferrer", target: "_blank" },
-    }),
-    Details.configure({
-      persist: true,
-      HTMLAttributes: { class: "details" },
-    }),
-    DetailsSummary,
-    DetailsContent,
-    Placeholder.configure({
-      includeChildren: true,
-      placeholder: ({ node }) =>
-        node.type.name === "detailsSummary" ? "Summary" : null,
-    }),
-  ],
-  content: `
-    <p>Look at these details</p>
-    <details>
-      <summary>This is a summary</summary>
-      <p>Surprise!</p>
-    </details>
-
-    <p>Code block with syntax highlighting:</p>
-    <pre><code class="language-javascript">console.log("highlight me!")</code></pre>
-
-    <p>Nested details are also supported</p>
-    <details open>
-      <summary>This is another summary</summary>
-      <p>And there is even more.</p>
-      <details>
-        <summary>We need to go deeper</summary>
-        <p>Booya!</p>
-      </details>
-    </details>
-  `,
-  onUpdate: ({ editor }) => onChange?.(editor.getHTML()),
-});
-
+      TextStyle,
+      Color,
+      Heading.configure({ levels: [1, 2, 3, 4, 5, 6] }),
+      TextAlign.configure({ types: ["heading", "paragraph"] }),
+      Link.configure({
+        openOnClick: false,
+        autolink: true,
+        linkOnPaste: true,
+        HTMLAttributes: { rel: "noopener noreferrer", target: "_blank" },
+      }),
+      Details.configure({
+        persist: true,
+        HTMLAttributes: { class: "details" },
+      }),
+      DetailsSummary,
+      DetailsContent,
+      Placeholder.configure({
+        includeChildren: true,
+        placeholder: ({ node }) =>
+          node.type.name === "detailsSummary" ? "Summary" : null,
+      }),
+    ],
+    content: value || "",
+    onUpdate: ({ editor }) => onChange?.(editor.getHTML()),
+  });
 
   const [colorValue, setColorValue] = useState("#000000");
 
@@ -222,7 +262,7 @@ const editor = useEditor({
             <ItalicIcon size={iconSize} />
           </button>
 
-          {/* Code block toggle (uses CodeBlockHL) */}
+          {/* Code block toggle */}
           <button
             type="button"
             onClick={() => editor.chain().focus().toggleCodeBlock().run()}
@@ -233,6 +273,12 @@ const editor = useEditor({
           >
             <CodeIcon size={iconSize} />
           </button>
+
+          {/* Emoji button */}
+          <EmojiButton
+            disabled={!editor || disabled}
+            onPick={(emoji) => editor.chain().focus().insertContent(emoji).run()}
+          />
         </div>
 
         {/* Lists */}
@@ -350,7 +396,7 @@ const editor = useEditor({
             <PaintBucket size={iconSize} />
           </button>
 
-          {["#000000","#ef4444", "#eab308", "#22c55e", "#3b82f6", "#a855f7"].map((hex) => (
+          {["#000000","#ef4444","#eab308","#22c55e","#3b82f6","#a855f7"].map((hex) => (
             <button
               key={hex}
               type="button"
@@ -394,10 +440,7 @@ const editor = useEditor({
                       type: "detailsContent",
                       attrs: { open: true },
                       content: [
-                        {
-                          type: "paragraph",
-                          content: [{ type: "text", text: "Details content…" }],
-                        },
+                        { type: "paragraph", content: [{ type: "text", text: "Details content…" }] },
                       ],
                     },
                   ],
@@ -427,13 +470,12 @@ const editor = useEditor({
         </div>
       </div>
 
-    {/* Editor */}
-    <div className="rounded-lg border border-neutral-300 bg-white focus-within:ring-2 focus-within:ring-primary/40">
-      <div className="overflow-auto max-h-[440px]">
-        <EditorContent editor={editor} className="tiptap" />
+      {/* Editor */}
+      <div className="rounded-lg border border-neutral-300 bg-white focus-within:ring-2 focus-within:ring-primary/40">
+        <div className="overflow-auto max-h-[440px]">
+          <EditorContent editor={editor} className="tiptap" />
+        </div>
       </div>
-    </div>
-
     </div>
   );
 }

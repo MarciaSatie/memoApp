@@ -1,4 +1,4 @@
-// src/components/cards/EditCard.jsx
+// src/components/cards/AddCard.jsx
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
@@ -13,16 +13,9 @@ import TipTapEditor from "../editor/TipTapEditor";
 import prettier from "prettier/standalone";
 
 import {
-  // cards at root
-  updateCard,
-  addCard,
-  deleteCard,
-  // cards in subdeck
-  updateCardInSubdeck,
-  addCardToSubdeck,
-  deleteCardInSubdeck,
-  // subdecks
-  getSubdecksCached,
+  addCard,               // root (main deck)
+  addCardToSubdeck,      // subdeck
+  getSubdecksCached,     // for the Location select
 } from "@/data/card";
 
 /* ---------------- Helpers ---------------- */
@@ -38,6 +31,11 @@ async function prettifyHtml(source) {
     console.warn("⚠️ Prettier HTML plugin load/format failed:", err?.message || err);
     return source || "";
   }
+}
+
+function getCurrentDate() {
+  const date = new Date();
+  return date.toISOString().split("T")[0]; // YYYY-MM-DD
 }
 
 // Split on comma/semicolon/newline; trim; dedupe case-insensitively
@@ -59,26 +57,27 @@ function parseKeywords(raw) {
   return out;
 }
 
-export default function EditCard({
-  deckId,
-  card,                 // { id, title, content, json, date, keywords?, subdeckId? }
-  onSaved,              // (cardId) => void
-  onCancel,             // () => void
-}) {
+export default function AddCard({ deckId }) {
+  // ✅ normalize deckId (accept string or deck object)
+  const deckIdStr = typeof deckId === "string" ? deckId : deckId?.id ?? null;
+
+  // Log immediately and whenever it changes
+  useEffect(() => {
+    console.log("AddCard deckId prop:", deckId, "→ normalized:", deckIdStr);
+  }, [deckId, deckIdStr]);
+
   // content fields
-  const [title, setTitle] = useState(card?.title || "");
-  const [date, setDate] = useState(card?.date || "");
-  const [content, setContent] = useState(card?.content || "");
-  const [editorJSON, setEditorJSON] = useState(card?.json ?? null);
+  const [title, setTitle] = useState("");
+  const [date, setDate] = useState(getCurrentDate());
+  const [content, setContent] = useState("");
+  const [editorJSON, setEditorJSON] = useState(null);
 
   // keywords (text area + derived list)
-  const [keywordsText, setKeywordsText] = useState(
-    Array.isArray(card?.keywords) ? card.keywords.join(", ") : ""
-  );
+  const [keywordsText, setKeywordsText] = useState("");
   const keywords = useMemo(() => parseKeywords(keywordsText), [keywordsText]);
 
   // location (root vs subdeck)
-  const [selectedSubdeckId, setSelectedSubdeckId] = useState(card?.subdeckId ?? "");
+  const [selectedSubdeckId, setSelectedSubdeckId] = useState(""); // "" => main deck
   const [subdecks, setSubdecks] = useState([]);
   const [loadingSubdecks, setLoadingSubdecks] = useState(false);
 
@@ -90,14 +89,14 @@ export default function EditCard({
   // Load subdecks list
   useEffect(() => {
     let cancelled = false;
-    if (!deckId) {
+    if (!deckIdStr) {
       setSubdecks([]);
       return;
     }
     (async () => {
       try {
         setLoadingSubdecks(true);
-        const list = await getSubdecksCached(deckId);
+        const list = await getSubdecksCached(deckIdStr);
         if (!cancelled) setSubdecks(Array.isArray(list) ? list : []);
       } catch (e) {
         if (!cancelled) setSubdecks([]);
@@ -106,19 +105,7 @@ export default function EditCard({
       }
     })();
     return () => { cancelled = true; };
-  }, [deckId]);
-
-  // Sync if card changes
-  useEffect(() => {
-    setTitle(card?.title || "");
-    setDate(card?.date || "");
-    setContent(card?.content || "");
-    setEditorJSON(card?.json ?? null);
-    setKeywordsText(Array.isArray(card?.keywords) ? card.keywords.join(", ") : "");
-    setSelectedSubdeckId(card?.subdeckId ?? "");
-    setError("");
-    setIsHtmlMode(false);
-  }, [card?.id]);
+  }, [deckIdStr]);
 
   // Prettify when switching into HTML mode
   useEffect(() => {
@@ -138,8 +125,11 @@ export default function EditCard({
 
   async function handleSave() {
     setError("");
-    if (!deckId || !card?.id) {
-      setError("Missing deckId or card id");
+
+    // Strong guard + log to help diagnose
+    if (!deckIdStr || typeof deckIdStr !== "string") {
+      console.warn("AddCard: invalid deckId prop at save time:", deckId, "normalized:", deckIdStr);
+      setError("Missing or invalid deckId");
       return;
     }
     if (!title.trim()) {
@@ -152,51 +142,34 @@ export default function EditCard({
       const contentToSave = isHtmlMode ? await prettifyHtml(content || "") : (content || "");
       const payload = {
         title: title.trim(),
-        date: date || null,
         content: contentToSave,
         json: editorJSON ?? null,
-        keywords, // normalized by data layer too, but we pass the array here
+        date: date || getCurrentDate(),
+        contentClasses: "tiptap-content prose prose-slate max-w-none leading-relaxed",
+        keywords, // array
       };
 
-      const before = card?.subdeckId ?? "";   // "" = main (root)
-      const after  = selectedSubdeckId ?? ""; // "" = main (root)
+      console.log("AddCard saving to:", selectedSubdeckId ? "subdeck" : "main", {
+        deckIdStr,
+        selectedSubdeckId,
+        payloadPreview: { title: payload.title, date: payload.date, keywords: payload.keywords },
+      });
 
-      // same location → simple update
-      if (before === after) {
-        if (after) {
-          await updateCardInSubdeck(deckId, after, card.id, payload);
-        } else {
-          await updateCard(deckId, card.id, payload);
-        }
-        onSaved?.(card.id);
-        return;
-      }
-
-      // location changed → move: create new in target, delete from old
-      let newId = card.id;
-
-      if (after) {
-        // move to subdeck
-        newId = await addCardToSubdeck(deckId, after, payload); // new id
-        if (before) {
-          await deleteCardInSubdeck(deckId, before, card.id);
-        } else {
-          await deleteCard(deckId, card.id);
-        }
+      if (selectedSubdeckId) {
+        await addCardToSubdeck(deckIdStr, selectedSubdeckId, payload);
       } else {
-        // move to main (root)
-        newId = await addCard(deckId, payload); // new id
-        if (before) {
-          await deleteCardInSubdeck(deckId, before, card.id);
-        } else {
-          // unlikely (we already know before !== after and after is root)
-          await deleteCard(deckId, card.id);
-        }
+        await addCard(deckIdStr, payload);
       }
 
-      onSaved?.(newId);
+      // Reset form
+      setTitle("");
+      setDate(getCurrentDate());
+      setContent("");
+      setEditorJSON(null);
+      setKeywordsText("");
+      // leave selectedSubdeckId as-is so adding multiple to same place is easy
     } catch (e) {
-      console.error("❌ save/move failed:", e?.code, e?.message, e);
+      console.error("❌ AddCard failed:", e?.code, e?.message, e);
       setError(e?.message || "Failed to save card");
     } finally {
       setSaving(false);
@@ -205,7 +178,7 @@ export default function EditCard({
 
   return (
     <div className="p-4 rounded-2xl shadow-soft border space-y-4">
-      {/* Title + Date (stacked on small screens) */}
+      {/* Title + Date */}
       <div className="flex flex-col gap-3 sm:flex-row">
         <input
           type="text"
@@ -217,7 +190,7 @@ export default function EditCard({
         />
         <input
           type="date"
-          value={date || ""}
+          value={date}
           onChange={(e) => setDate(e.target.value)}
           className="border rounded-xl px-3 py-2 bg-white text-gray-700"
           disabled={saving}
@@ -231,7 +204,7 @@ export default function EditCard({
           value={selectedSubdeckId}
           onChange={(e) => setSelectedSubdeckId(e.target.value)}
           className="w-full border rounded-xl px-3 py-2 bg-white text-gray-700"
-          disabled={saving || loadingSubdecks}
+          disabled={saving || loadingSubdecks || !deckIdStr}
         >
           <option value="">Main deck</option>
           {subdecks.map((sd) => (
@@ -319,23 +292,13 @@ export default function EditCard({
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <div className="flex items-center gap-2">
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="px-4 py-2 rounded-2xl bg-bd text-gray-700 hover:bg-mmHover disabled:opacity-60"
-        >
-          {saving ? "Saving..." : "Save Changes"}
-        </button>
-        <button
-          type="button"
-          onClick={onCancel}
-          className="px-4 py-2 rounded-2xl border text-gray-700 hover:bg-gray-50"
-          disabled={saving}
-        >
-          Cancel
-        </button>
-      </div>
+      <button
+        onClick={handleSave}
+        disabled={saving}
+        className="px-4 py-2 rounded-2xl bg-bd text-gray-700 hover:bg-mmHover disabled:opacity-60"
+      >
+        {saving ? "Saving..." : "Save Card"}
+      </button>
     </div>
   );
 }
