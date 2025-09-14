@@ -65,61 +65,65 @@ export default function TipTapEditor({
   disabled = false,
   className = "",
 }) {
-  const editor = useEditor({
-    immediatelyRender: false,
-    extensions: [
-      // Disable StarterKit's built-in codeBlock so our CodeBlockHL is used
-      StarterKit.configure({ codeBlock: false }),
+const editor = useEditor({
+  immediatelyRender: false,
+  editorProps: {
+    attributes: {
+      // Applied to the ProseMirror root. Removes harsh outline; pair with a
+      // focus ring on the wrapper using `focus-within:` utilities.
+      class: "tiptap prose-sm focus:outline-none outline-none",
+    },
+  },
+  extensions: [
+    // Use our Lowlight-backed code block
+    StarterKit.configure({ codeBlock: false }),
+    CodeBlockHL,
 
-      // Lowlight-backed code block with <code class="hljs language-xxx">
-      CodeBlockHL,
+    TextStyle,
+    Color,
+    Heading.configure({ levels: [1, 2, 3, 4, 5, 6] }),
+    TextAlign.configure({ types: ["heading", "paragraph"] }),
+    Link.configure({
+      openOnClick: false,
+      autolink: true,
+      linkOnPaste: true,
+      HTMLAttributes: { rel: "noopener noreferrer", target: "_blank" },
+    }),
+    Details.configure({
+      persist: true,
+      HTMLAttributes: { class: "details" },
+    }),
+    DetailsSummary,
+    DetailsContent,
+    Placeholder.configure({
+      includeChildren: true,
+      placeholder: ({ node }) =>
+        node.type.name === "detailsSummary" ? "Summary" : null,
+    }),
+  ],
+  content: `
+    <p>Look at these details</p>
+    <details>
+      <summary>This is a summary</summary>
+      <p>Surprise!</p>
+    </details>
 
-      TextStyle,
-      Color,
-      Heading.configure({ levels: [1, 2, 3, 4, 5, 6] }),
-      TextAlign.configure({ types: ["heading", "paragraph"] }),
-      Link.configure({
-        openOnClick: false,
-        autolink: true,
-        linkOnPaste: true,
-        HTMLAttributes: { rel: "noopener noreferrer", target: "_blank" },
-      }),
-      Details.configure({
-        persist: true,
-        HTMLAttributes: { class: "details" },
-      }),
-      DetailsSummary,
-      DetailsContent,
-      Placeholder.configure({
-        includeChildren: true,
-        placeholder: ({ node }) => {
-          if (node.type.name === "detailsSummary") return "Summary";
-          return null;
-        },
-      }),
-    ],
-    content: `
-      <p>Look at these details</p>
+    <p>Code block with syntax highlighting:</p>
+    <pre><code class="language-javascript">console.log("highlight me!")</code></pre>
+
+    <p>Nested details are also supported</p>
+    <details open>
+      <summary>This is another summary</summary>
+      <p>And there is even more.</p>
       <details>
-        <summary>This is a summary</summary>
-        <p>Surprise!</p>
+        <summary>We need to go deeper</summary>
+        <p>Booya!</p>
       </details>
+    </details>
+  `,
+  onUpdate: ({ editor }) => onChange?.(editor.getHTML()),
+});
 
-      <p>Code block with syntax highlighting:</p>
-      <pre><code class="language-javascript">console.log("highlight me!")</code></pre>
-
-      <p>Nested details are also supported</p>
-      <details open>
-        <summary>This is another summary</summary>
-        <p>And there is even more.</p>
-        <details>
-          <summary>We need to go deeper</summary>
-          <p>Booya!</p>
-        </details>
-      </details>
-    `,
-    onUpdate: ({ editor }) => onChange?.(editor.getHTML()),
-  });
 
   const [colorValue, setColorValue] = useState("#000000");
 
@@ -346,7 +350,7 @@ export default function TipTapEditor({
             <PaintBucket size={iconSize} />
           </button>
 
-          {["#ef4444", "#eab308", "#22c55e", "#3b82f6", "#a855f7"].map((hex) => (
+          {["#000000","#ef4444", "#eab308", "#22c55e", "#3b82f6", "#a855f7"].map((hex) => (
             <button
               key={hex}
               type="button"
@@ -423,10 +427,13 @@ export default function TipTapEditor({
         </div>
       </div>
 
-      {/* Editor */}
+    {/* Editor */}
+    <div className="rounded-lg border border-neutral-300 bg-white focus-within:ring-2 focus-within:ring-primary/40">
       <div className="overflow-auto max-h-[440px]">
         <EditorContent editor={editor} className="tiptap" />
       </div>
+    </div>
+
     </div>
   );
 }

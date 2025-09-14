@@ -153,3 +153,20 @@ body {
   overflow-x: auto;
   font-family: var(--font-geist-mono);
 }
+
+/* Kill the default black focus outline */
+.tiptap:focus,
+.tiptap .ProseMirror:focus,
+.ProseMirror:focus {
+  outline: none;
+}
+
+/* Optional: nicer selection outline for node selections (images, code blocks, etc.) */
+.tiptap .ProseMirror-selectednode {
+  outline: 2px solid hsl(var(--primary) / 0.5);
+}
+
+/* Optional: give the editor a bit of inner padding so caret isn't glued to the edge */
+.tiptap .ProseMirror {
+  padding: 0.75rem;
+}
