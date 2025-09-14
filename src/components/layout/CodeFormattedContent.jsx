@@ -1,3 +1,4 @@
+// src/components/common/CodeFormattedContent.jsx
 "use client";
 
 import { useEffect, useRef } from "react";
@@ -9,6 +10,12 @@ export default function CodeFormattedContent({ className = "", children }) {
     let cancelled = false;
     const host = hostRef.current;
     if (!host) return;
+
+    // Use the same class used by the editor to share styles
+    host.classList.add("tiptap");
+
+    // Inject minimal table styles if not present globally
+    ensureGlobalStyles(host.ownerDocument);
 
     host.innerHTML = typeof children === "string" ? children : "";
 
@@ -48,7 +55,8 @@ export default function CodeFormattedContent({ className = "", children }) {
       // Load Prism + a few languages
       let Prism;
       try {
-        Prism = (await import("prismjs")).default || (await import("prismjs"));
+        Prism =
+          (await import("prismjs")).default || (await import("prismjs"));
         await Promise.all([
           import("prismjs/components/prism-markup"),
           import("prismjs/components/prism-javascript"),
@@ -65,6 +73,10 @@ export default function CodeFormattedContent({ className = "", children }) {
 
       if (cancelled) return;
 
+      // ── Tables: apply colgroup widths & normalize markup ──────────────────────
+      normalizeTiptapTables(host);
+
+      // ── Code blocks: pretty + highlight + copy ───────────────────────────────
       const blocks = host.querySelectorAll("pre > code");
       blocks.forEach((codeEl) => {
         const pre = codeEl.parentElement;
@@ -97,18 +109,127 @@ export default function CodeFormattedContent({ className = "", children }) {
         attachCopy(pre, codeEl);
 
         if (Prism && typeof Prism.highlightElement === "function") {
-          try { Prism.highlightElement(codeEl); } catch {}
+          try {
+            Prism.highlightElement(codeEl);
+          } catch {}
         }
       });
     })();
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [children]);
 
-  return <div ref={hostRef} className={className} />;
+  return <div ref={hostRef} className={`tiptap ${className}`} />;
 }
 
-/* ─── helpers ─── */
+/* ───────────────────────────────── helpers ─────────────────────────────────── */
+
+function ensureGlobalStyles(doc) {
+  if (!doc) return;
+  if (doc.getElementById("cfc-tiptap-styles")) return;
+
+  const css = `
+  /* Tables (match TipTap Editor look) */
+  .tiptap table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  .tiptap th, .tiptap td { border: 1px solid #e5e7eb; padding: .375rem .5rem; vertical-align: top; }
+  .tiptap th { background: #f8fafc; font-weight: 600; }
+  .tiptap thead th { position: sticky; top: 0; z-index: 1; }
+  `;
+
+  const style = doc.createElement("style");
+  style.id = "cfc-tiptap-styles";
+  style.type = "text/css";
+  style.appendChild(doc.createTextNode(css));
+  doc.head.appendChild(style);
+}
+
+/**
+ * Read Tiptap/ProseMirror column widths (data-colwidth) and materialize them
+ * into a <colgroup> so the read-only view respects the editor’s resize state.
+ */
+function normalizeTiptapTables(root) {
+  const tables = root.querySelectorAll("table");
+  tables.forEach((table) => {
+    // Avoid re-processing
+    if (table.__ttNormalized) return;
+    table.__ttNormalized = true;
+
+    // If a colgroup already exists, keep it
+    const hasColGroup = !!table.querySelector(":scope > colgroup");
+    if (hasColGroup) return;
+
+    // Try to collect column widths scanning rows
+    const widths = collectColumnWidths(table);
+    if (!widths.length) return;
+
+    const colgroup = document.createElement("colgroup");
+    widths.forEach((w) => {
+      const col = document.createElement("col");
+      if (w && Number.isFinite(w) && w > 0) {
+        col.style.width = `${w}px`;
+      }
+      colgroup.appendChild(col);
+    });
+
+    // Insert as first child
+    table.insertBefore(colgroup, table.firstChild);
+  });
+}
+
+function collectColumnWidths(table) {
+  // We’ll scan all rows; the first explicit width we find per column wins.
+  const widths = [];
+  const rows = table.querySelectorAll("tr");
+  rows.forEach((tr) => {
+    let colIndex = 0;
+    const cells = Array.from(tr.children).filter(
+      (el) => el.tagName === "TD" || el.tagName === "TH"
+    );
+    cells.forEach((cell) => {
+      const colspan = Math.max(parseInt(cell.getAttribute("colspan") || "1", 10), 1);
+      const data = cell.getAttribute("data-colwidth");
+      const list = data
+        ? data
+            .split(",")
+            .map((s) => parseInt(s, 10))
+            .filter((n) => Number.isFinite(n) && n > 0)
+        : [];
+
+      for (let i = 0; i < colspan; i++) {
+        const target = colIndex + i;
+        if (widths[target] == null) {
+          const candidate = list[i];
+          if (Number.isFinite(candidate) && candidate > 0) {
+            widths[target] = candidate;
+          } else {
+            // fallback: try inline width on the cell itself
+            const w = extractPixelWidth(cell);
+            if (w) widths[target] = w;
+          }
+        }
+      }
+      colIndex += colspan;
+    });
+  });
+  // Trim trailing undefineds
+  while (widths.length && widths[widths.length - 1] == null) widths.pop();
+  return widths;
+}
+
+function extractPixelWidth(el) {
+  // Try style="width: Npx"
+  const sw = el.style?.width || "";
+  const m = sw.match(/^\s*(\d+(?:\.\d+)?)px\s*$/i);
+  if (m) return parseFloat(m[1]);
+
+  // Try computed width (rough fallback)
+  const cw = Number.parseFloat(getComputedStyle(el).width);
+  return Number.isFinite(cw) && cw > 0 ? Math.round(cw) : null;
+}
+
+/* ─── code helpers ─── */
 function detectLang(codeEl, src = "") {
   const cls = (codeEl.className || "").toLowerCase();
   const attr =
@@ -137,6 +258,7 @@ function detectLang(codeEl, src = "") {
   if (/^#{1,6}\s/m.test(s) || (/[\S]\s*\|\s*[\S]/.test(s) && /\|/.test(s))) return "markdown";
   return "";
 }
+
 function aliasToKnown(lang) {
   const map = {
     html: "markup",
@@ -153,20 +275,29 @@ function aliasToKnown(lang) {
   };
   return map[lang] || null;
 }
+
 function chooseParser(lang, src) {
   switch (lang) {
-    case "markup": return "html";
-    case "css": return "css";
-    case "json": return "json";
+    case "markup":
+      return "html";
+    case "css":
+      return "css";
+    case "json":
+      return "json";
     case "typescript":
-    case "tsx": return "typescript";
-    case "javascript": return "babel";
-    case "markdown": return "markdown";
-    default: break; // bash/powershell -> no Prettier
+    case "tsx":
+      return "typescript";
+    case "javascript":
+      return "babel";
+    case "markdown":
+      return "markdown";
+    default:
+      break; // bash/powershell -> no Prettier
   }
   const s = (src || "").trim();
   if (/^\s*</.test(s)) return "html";
-  if ((s.startsWith("{") && s.endsWith("}")) || (s.startsWith("[") && s.endsWith("]"))) return "json";
+  if ((s.startsWith("{") && s.endsWith("}")) || (s.startsWith("[") && s.endsWith("]")))
+    return "json";
   if (/(^|\n)\s*(import|export)\s/m.test(s)) return "babel";
   if (/^#{1,6}\s/m.test(s)) return "markdown";
   return null;
@@ -179,7 +310,7 @@ function attachCopy(pre, codeEl) {
   // Reserve space for the button so it never sits over the code text
   if (!codeEl.dataset.copyPadApplied) {
     const cs = getComputedStyle(codeEl);
-    const padTop = Math.max(parseFloat(cs.paddingTop) || 0, 28);   // ~top-7
+    const padTop = Math.max(parseFloat(cs.paddingTop) || 0, 28); // ~top-7
     const padRight = Math.max(parseFloat(cs.paddingRight) || 0, 40); // room for icon
     codeEl.style.paddingTop = `${padTop}px`;
     codeEl.style.paddingRight = `${padRight}px`;
@@ -192,7 +323,6 @@ function attachCopy(pre, codeEl) {
   btn.setAttribute("aria-label", "Copy code");
   btn.title = "Copy";
 
-  // Bigger icon, sit away from edges, white on hover, above code
   btn.className = [
     "group absolute top-2 right-2 z-10",
     "inline-grid place-items-center",
@@ -200,7 +330,7 @@ function attachCopy(pre, codeEl) {
     "bg-transparent",
     "text-neutral-300 hover:text-white",
     "focus:outline-none focus:ring-2 focus:ring-white/30",
-    "transition-colors"
+    "transition-colors",
   ].join(" ");
 
   btn.innerHTML = `

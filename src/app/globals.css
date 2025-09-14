@@ -45,7 +45,7 @@
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #0a0a0a;
-    --foreground: #5e5e5e;
+    --foreground: #535457;
     --foregroundLight: #c6c5c5;
   }
 }
@@ -170,3 +170,25 @@ body {
 .tiptap .ProseMirror {
   padding: 0.75rem;
 }
+
+
+
+ /* Tables (match TipTap Editor look) */
+/* Base */
+.tiptap table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.tiptap th, .tiptap td { border: px solid #273946; padding: .375rem .5rem; vertical-align: top; }
+
+/* Header mais escuro (atinge os <th> que o TipTap coloca no <tbody>) */
+.tiptap table th { background-color: #91a5b1 !important; color:#fff !important; }
+
+/* (Opcional) Se quiser manter um tom claro para outros th fora do header,
+   deixe só o primeiro <tr> com th escuros */
+.tiptap tbody tr:first-child th {
+  background: #749ec9;
+  color: #0b1d2a;
+}
+
+
+
+
+  
