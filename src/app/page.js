@@ -33,7 +33,7 @@ export default function Home() {
 
 
       {!loading && loggedIn && (
-        <div className="flex-1 flex gap-4 overflow-hidden border border-bd">
+        <div className="flex-1 flex gap-4 overflow-auto border border-bd">
           <SidebarMenu expanded={expanded} onToggle={() => setExpanded(e => !e)}>
             {/* Right: Cards panel fills remaining space */}
             <section className="flex-1 min-w-0 border border-bd rounded">

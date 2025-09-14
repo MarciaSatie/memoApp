@@ -1,25 +1,50 @@
 "use client";
-import { useEffect } from "react";
-import { createPortal } from "react-dom"; // portal renders above app (into document.body)
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
+
+// ---- body lock helpers (same as you have) ----
+let BODY_LOCKS = 0;
+let PREV_OVERFLOW = "";
+let PREV_PADDING_RIGHT = "";
+function lockBody() {
+  if (BODY_LOCKS === 0) {
+    PREV_OVERFLOW = document.body.style.overflow;
+    PREV_PADDING_RIGHT = document.body.style.paddingRight;
+    const sw = window.innerWidth - document.documentElement.clientWidth;
+    if (sw > 0) document.body.style.paddingRight = `${sw}px`;
+    document.body.style.overflow = "hidden";
+  }
+  BODY_LOCKS++;
+}
+function unlockBody() {
+  BODY_LOCKS = Math.max(0, BODY_LOCKS - 1);
+  if (BODY_LOCKS === 0) {
+    document.body.style.overflow = PREV_OVERFLOW || "";
+    document.body.style.paddingRight = PREV_PADDING_RIGHT || "";
+  }
+}
 
 export default function Modal({ open, onClose, title, children }) {
-  if (!open) return null;
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
     const onKey = (e) => e.key === "Escape" && onClose?.();
     document.addEventListener("keydown", onKey);
-
-    // lock body scroll
-    const orig = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-
+    lockBody();
     return () => {
       document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = orig;
+      unlockBody();
     };
-  }, [onClose]);
+  }, [open, onClose]);
 
-  // Render the modal into document.body so it overlays the entire app.
+  // Don’t render on the server or before mount (avoids the React dev error)
+  if (!open || !mounted) return null;
+
   return createPortal(
     <div
       className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/50"
@@ -28,7 +53,8 @@ export default function Modal({ open, onClose, title, children }) {
       role="dialog"
     >
       <div
-        className="relative w-[100%] h-[95%] max-w-4xl rounded-2xl bg-white p-6 shadow-xl text-foreground overflow-y-auto"
+        className="relative w-full max-w-4xl h-[95vh] rounded-2xl bg-white p-6 shadow-xl text-foreground overflow-y-auto overscroll-contain"
+        style={{ WebkitOverflowScrolling: "touch", touchAction: "pan-y" }}
         onClick={(e) => e.stopPropagation()}
       >
         <button
@@ -38,25 +64,10 @@ export default function Modal({ open, onClose, title, children }) {
         >
           ✕
         </button>
-
-        {title && <h2 className="mb-4 text-xl text-primary font-bold">{title}</h2>}
-
-        {/* 
-          If the content you pass in uses `prose`, Typography will
-          set a light gray body color. This wrapper forces prose
-          elements to use your theme colors instead.
-        */}
-        <div className="
-          prose max-w-none
-          prose-headings:text-foreground
-          prose-p:text-foreground
-          prose-li:text-foreground
-          prose-strong:text-foreground
-          prose-em:text-foreground
-          prose-blockquote:text-foreground
-          prose-a:text-primary
-          prose-code:text-foreground
-        ">
+        {title && (
+          <h2 className="mb-4 text-xl text-primary font-bold">{title}</h2>
+        )}
+        <div className="prose max-w-none prose-headings:text-foreground prose-p:text-foreground prose-li:text-foreground prose-strong:text-foreground prose-em:text-foreground prose-blockquote:text-foreground prose-a:text-primary prose-code:text-foreground">
           {children}
         </div>
       </div>
