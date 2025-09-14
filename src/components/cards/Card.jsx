@@ -3,11 +3,12 @@
 
 import { useState, useMemo, useCallback } from "react";
 import dynamic from "next/dynamic";
-import { updateCard, deleteCard } from "@/data/card";
+import { deleteCard } from "@/data/card";
 import EditCard from "@/components/cards/EditCard";
 import { Pencil, Trash2 } from "lucide-react";
+import CodeFormattedContent from "@/components/layout/CodeFormattedContent";
 
-// 👉 important: client-only modal (avoids React “static flag” dev error)
+// Client-only Modal avoids the React dev "static flag" error
 const Modal = dynamic(() => import("@/components/layout/Modal"), { ssr: false });
 
 /**
@@ -39,7 +40,7 @@ export default function Card({
   bodyClass = "",
   onUpdated,
   onDeleted,
-  onModalStateChange, // ← optional
+  onModalStateChange,
 }) {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -54,9 +55,11 @@ export default function Card({
     return typeof total === "number" && total > 0 ? `${oneBased} / ${total}` : `${oneBased}`;
   }, [index, total]);
 
-  const formattedPrimaryDate = useMemo(() => {
-    return formatCardDate(card?.date) || formatCardDate(card?.createdAt) || null;
-  }, [card?.date, card?.createdAt]);
+  // Prefer explicit card.date, else fall back to createdAt if present
+  const formattedPrimaryDate = useMemo(
+    () => formatCardDate(card?.date) || formatCardDate(card?.createdAt) || null,
+    [card?.date, card?.createdAt]
+  );
 
   const openModal = useCallback(() => {
     setError("");
@@ -165,22 +168,22 @@ export default function Card({
           </header>
 
           <div className="px-4 pb-4 h-[calc(100%-70px)]">
-            <div
+            <CodeFormattedContent
               className={[
                 "tiptap tiptap-content leading-relaxed space-y-3",
                 "h-full overflow-auto border border-bd rounded-xl p-3 bg-white",
                 card.contentClasses || "",
                 bodyClass,
               ].join(" ")}
-              dangerouslySetInnerHTML={{
-                __html: card.content || "<p><em>No content</em></p>",
-              }}
-            />
+            >
+              {card.content || "<p><em>No content</em></p>"}
+            </CodeFormattedContent>
+
           </div>
         </div>
       </article>
 
-      {/* Only render modal when open (pairs with ssr:false + mount guard in Modal.jsx) */}
+      {/* Modal (client-only, rendered only when open) */}
       {open && (
         <Modal
           open={open}
@@ -228,17 +231,17 @@ export default function Card({
               </div>
             )}
 
+            {/* VIEW MODE */}
             {!editing ? (
               <>
                 {showDate && formattedPrimaryDate && (
                   <div className="text-xs text-gray-500">{formattedPrimaryDate}</div>
                 )}
-                <div
+                <CodeFormattedContent
                   className="tiptap tiptap-content leading-relaxed space-y-3 border border-bd rounded-xl p-3 overflow-auto bg-white"
-                  dangerouslySetInnerHTML={{
-                    __html: card.content || "<p><em>No content</em></p>",
-                  }}
-                />
+                >
+                  {card.content || "<p><em>No content</em></p>"}
+                </CodeFormattedContent>
               </>
             ) : (
               <EditCard
