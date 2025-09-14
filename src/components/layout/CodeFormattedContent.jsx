@@ -176,15 +176,25 @@ function attachCopy(pre, codeEl) {
   pre.classList.add("relative");
   pre.querySelectorAll('[data-copy-btn="true"]').forEach((b) => b.remove());
 
+  // Reserve space for the button so it never sits over the code text
+  if (!codeEl.dataset.copyPadApplied) {
+    const cs = getComputedStyle(codeEl);
+    const padTop = Math.max(parseFloat(cs.paddingTop) || 0, 28);   // ~top-7
+    const padRight = Math.max(parseFloat(cs.paddingRight) || 0, 40); // room for icon
+    codeEl.style.paddingTop = `${padTop}px`;
+    codeEl.style.paddingRight = `${padRight}px`;
+    codeEl.dataset.copyPadApplied = "1";
+  }
+
   const btn = document.createElement("button");
   btn.type = "button";
   btn.setAttribute("data-copy-btn", "true");
   btn.setAttribute("aria-label", "Copy code");
   btn.title = "Copy";
 
-  // bigger icon, transparent BG, white on hover
+  // Bigger icon, sit away from edges, white on hover, above code
   btn.className = [
-    "group absolute top-0 right-0",
+    "group absolute top-2 right-2 z-10",
     "inline-grid place-items-center",
     "p-1.5 rounded-md",
     "bg-transparent",
@@ -195,7 +205,7 @@ function attachCopy(pre, codeEl) {
 
   btn.innerHTML = `
     <svg xmlns="http://www.w3.org/2000/svg"
-         width="16" height="16" viewBox="0 0 24 24"
+         width="18" height="18" viewBox="0 0 24 24"
          fill="none" stroke="currentColor" stroke-width="2"
          stroke-linecap="round" stroke-linejoin="round"
          aria-hidden="true" focusable="false">
