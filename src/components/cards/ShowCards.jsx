@@ -182,17 +182,36 @@ export default function ShowCards({ deck }) {
           />
         </div>
 
-        <button
-          onClick={() => setOpen(true)}
-          disabled={!deckId}
-          className="mt-2 rounded-lg bg-primary px-4 py-2 text-white hover:bg-bd disabled:opacity-50"
-        >
-          Add Card
-        </button>
 
-        <Modal open={open} onClose={handleCloseAddModal} title="Add a new card">
-          <AddCard deckId={deckId} />
-        </Modal>
+      <button
+        onClick={() => {
+          setOpen(true);
+          setCarouselLocked(true);   // optional: freeze carousel while modal is open
+        }}
+        disabled={!deckId}
+        className="mt-2 rounded-lg bg-primary px-4 py-2 text-white hover:bg-bd disabled:opacity-50"
+      >
+        Add Card
+      </button>
+
+      <Modal
+        open={open}
+        onClose={handleCloseAddModal}
+        title="Add a new card"
+        closeOnBackdropClick={false}  // ⛔ don't close on outside click
+        closeOnEsc={false}            // ⛔ don't close on Esc (optional)
+      >
+        <div
+          // extra safety against any parent click-away in capture phase
+          onPointerDown={(e) => e.stopPropagation()}
+          onPointerUp={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
+        >
+          <AddCard deckId={deckId} onClose={handleCloseAddModal} />
+        </div>
+      </Modal>
+
       </div>
 
       {/* Search (root + subdecks) */}
