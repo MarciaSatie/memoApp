@@ -196,6 +196,7 @@ export default function ShowCards({ deck }) {
 
       <Modal
         open={open}
+        
         onClose={handleCloseAddModal}
         title="Add a new card"
         closeOnBackdropClick={false}  // ⛔ don't close on outside click
