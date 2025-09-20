@@ -1,7 +1,7 @@
 // src/components/cards/EditCard.jsx
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import dynamic from "next/dynamic";
 const CodeMirror = dynamic(
   () => import("@uiw/react-codemirror").then((m) => m.default),
@@ -83,6 +83,7 @@ export default function EditCard({
   const [isHtmlMode, setIsHtmlMode] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [justSaved, setJustSaved] = useState(false); // hotkey feedback
 
   // Load subdecks for dropdown (once per deckId)
   useEffect(() => {
@@ -133,69 +134,112 @@ export default function EditCard({
     setContent(pretty);
   }
 
-  async function handleSave() {
-    setError("");
-    if (!deckId || !card?.id) {
-      setError("Missing deckId or card id");
-      return;
-    }
-    if (!title.trim()) {
-      setError("Title is required");
-      return;
-    }
-
-    setSaving(true);
-    try {
-      const contentToSave = isHtmlMode ? await prettifyHtml(content || "") : (content || "");
-      const payload = {
-        title: title.trim(),
-        date: date || null,
-        content: contentToSave,
-        json: editorJSON ?? null,
-        keywords, // save keywords array
-        // contentClasses: (omit to keep existing)
-      };
-
-      const oldSubdeckId = card?.subdeckId ?? null;
-      const newSubdeckId = selectedSubdeckId || null;
-
-      // (A) no location change -> simple update
-      if (oldSubdeckId === newSubdeckId) {
-        if (newSubdeckId) {
-          // still inside same subdeck
-          await updateCardInSubdeck(deckId, newSubdeckId, card.id, payload);
-        } else {
-          // still in main/root
-          await updateCard(deckId, card.id, payload);
-        }
-        onSaved?.(card.id);
+  /**
+   * Save handler.
+   * - stay=false  → button save (calls onSaved → parent can close)
+   * - stay=true   → hotkey save (keep editing; no onSaved; show "Saved ✓")
+   */
+  const handleSave = useCallback(
+    async (stay = false) => {
+      setError("");
+      if (!deckId || !card?.id) {
+        setError("Missing deckId or card id");
+        return;
+      }
+      if (!title.trim()) {
+        setError("Title is required");
         return;
       }
 
-      // (B) location changed -> move (create in new place, delete old)
-      let newId;
-      if (!oldSubdeckId && newSubdeckId) {
-        // main -> subdeck
-        newId = await addCardToSubdeck(deckId, newSubdeckId, payload);
-        await deleteCard(deckId, card.id);
-      } else if (oldSubdeckId && !newSubdeckId) {
-        // subdeck -> main
-        newId = await addCard(deckId, payload);
-        await deleteCardInSubdeck(deckId, oldSubdeckId, card.id);
-      } else {
-        // subdeck A -> subdeck B
-        newId = await addCardToSubdeck(deckId, newSubdeckId, payload);
-        await deleteCardInSubdeck(deckId, oldSubdeckId, card.id);
-      }
+      setSaving(true);
+      try {
+        const contentToSave = isHtmlMode ? await prettifyHtml(content || "") : (content || "");
+        const payload = {
+          title: title.trim(),
+          date: date || null,
+          content: contentToSave,
+          json: editorJSON ?? null,
+          keywords, // save keywords array
+          // contentClasses: (omit to keep existing)
+        };
 
-      onSaved?.(newId || card.id);
-    } catch (e) {
-      console.error("❌ save/move failed:", e?.code, e?.message, e);
-      setError(e?.message || "Failed to save card");
-    } finally {
-      setSaving(false);
+        const oldSubdeckId = card?.subdeckId ?? null;
+        const newSubdeckId = selectedSubdeckId || null;
+
+        // (A) no location change -> simple update
+        if (oldSubdeckId === newSubdeckId) {
+          if (newSubdeckId) {
+            await updateCardInSubdeck(deckId, newSubdeckId, card.id, payload);
+          } else {
+            await updateCard(deckId, card.id, payload);
+          }
+          if (stay) {
+            setJustSaved(true);
+            setTimeout(() => setJustSaved(false), 1200);
+          } else {
+            onSaved?.(card.id);
+          }
+          return;
+        }
+
+        // (B) location changed -> move (create in new place, delete old)
+        let newId;
+        if (!oldSubdeckId && newSubdeckId) {
+          // main -> subdeck
+          newId = await addCardToSubdeck(deckId, newSubdeckId, payload);
+          await deleteCard(deckId, card.id);
+        } else if (oldSubdeckId && !newSubdeckId) {
+          // subdeck -> main
+          newId = await addCard(deckId, payload);
+          await deleteCardInSubdeck(deckId, oldSubdeckId, card.id);
+        } else {
+          // subdeck A -> subdeck B
+          newId = await addCardToSubdeck(deckId, newSubdeckId, payload);
+          await deleteCardInSubdeck(deckId, oldSubdeckId, card.id);
+        }
+
+        if (stay) {
+          // We moved: update the local selectedSubdeckId so future saves keep updating in place.
+          setSelectedSubdeckId(newSubdeckId);
+          setJustSaved(true);
+          setTimeout(() => setJustSaved(false), 1200);
+        } else {
+          onSaved?.(newId || card.id);
+        }
+      } catch (e) {
+        console.error("❌ save/move failed:", e?.code, e?.message, e);
+        setError(e?.message || "Failed to save card");
+      } finally {
+        setSaving(false);
+      }
+    },
+    [
+      deckId,
+      card?.id,
+      card?.subdeckId,
+      title,
+      date,
+      content,
+      isHtmlMode,
+      editorJSON,
+      keywords,
+      selectedSubdeckId,
+      onSaved,
+    ]
+  );
+
+  // Global hotkey: ⌘/Ctrl+S → save & keep editing
+  useEffect(() => {
+    function onKeyDown(e) {
+      const isSaveCombo = (e.ctrlKey || e.metaKey) && (e.key === "s" || e.key === "S");
+      if (isSaveCombo) {
+        e.preventDefault();
+        handleSave(true); // stay = true → keep editing
+      }
     }
-  }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [handleSave]);
 
   return (
     <div className="p-4 rounded-2xl shadow-soft border space-y-4">
@@ -281,6 +325,12 @@ export default function EditCard({
               </button>
             )}
           </div>
+
+          {/* Hotkey hint + saved indicator */}
+          <div className="text-xs text-gray-500">
+            Press <kbd className="px-1 py-0.5 border rounded">Ctrl/⌘+S</kbd> to save
+            {justSaved && <span className="ml-2 text-green-600">Saved ✓</span>}
+          </div>
         </div>
 
         {isHtmlMode ? (
@@ -307,13 +357,15 @@ export default function EditCard({
       {error && <p className="text-sm text-red-600">{error}</p>}
 
       <div className="flex items-center gap-2">
+        {/* Save & Close */}
         <button
-          onClick={handleSave}
+          onClick={() => handleSave(false)}
           disabled={saving}
           className="px-4 py-2 rounded-2xl bg-bd text-gray-700 hover:bg-mmHover disabled:opacity-60"
         >
           {saving ? "Saving..." : "Save Changes"}
         </button>
+
         <button
           type="button"
           onClick={onCancel}

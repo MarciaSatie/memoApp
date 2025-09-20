@@ -1,7 +1,7 @@
 // src/components/cards/AddCard.jsx
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import dynamic from "next/dynamic";
 const CodeMirror = dynamic(
   () => import("@uiw/react-codemirror").then((m) => m.default),
@@ -16,6 +16,8 @@ import {
   addCard,               // root (main deck)
   addCardToSubdeck,      // subdeck
   getSubdecksCached,     // for the Location select
+  updateCard,
+  updateCardInSubdeck,
 } from "@/data/card";
 
 /* ---------------- Helpers ---------------- */
@@ -57,14 +59,17 @@ function parseKeywords(raw) {
   return out;
 }
 
-export default function AddCard({ deckId }) {
+/**
+ * Props:
+ *   - deckId: string | { id: string }
+ *   - onClose?: () => void   // called after Save button (save & close)
+ */
+export default function AddCard({ deckId, onClose }) {
   // ✅ normalize deckId (accept string or deck object)
   const deckIdStr = typeof deckId === "string" ? deckId : deckId?.id ?? null;
 
-  // Log immediately and whenever it changes
-  useEffect(() => {
-    console.log("AddCard deckId prop:", deckId, "→ normalized:", deckIdStr);
-  }, [deckId, deckIdStr]);
+  // Track the created card id so hotkey saves update instead of duplicating
+  const [currentCardId, setCurrentCardId] = useState(null);
 
   // content fields
   const [title, setTitle] = useState("");
@@ -85,6 +90,18 @@ export default function AddCard({ deckId }) {
   const [isHtmlMode, setIsHtmlMode] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [justSaved, setJustSaved] = useState(false);
+
+  // Prevent click-away close by stopping event bubbling from inside
+  const rootRef = useRef(null);
+  const stopBubble = (e) => {
+    e.stopPropagation();
+  };
+
+  // Log normalized deckId when it changes
+  useEffect(() => {
+    console.log("AddCard deckId prop:", deckId, "→ normalized:", deckIdStr);
+  }, [deckId, deckIdStr]);
 
   // Load subdecks list
   useEffect(() => {
@@ -98,7 +115,7 @@ export default function AddCard({ deckId }) {
         setLoadingSubdecks(true);
         const list = await getSubdecksCached(deckIdStr);
         if (!cancelled) setSubdecks(Array.isArray(list) ? list : []);
-      } catch (e) {
+      } catch {
         if (!cancelled) setSubdecks([]);
       } finally {
         if (!cancelled) setLoadingSubdecks(false);
@@ -123,10 +140,26 @@ export default function AddCard({ deckId }) {
     setContent(pretty);
   }
 
-  async function handleSave() {
+  // Build payload with current UI state
+  const buildPayload = useCallback(async () => {
+    const contentToSave = isHtmlMode ? await prettifyHtml(content || "") : (content || "");
+    return {
+      title: title.trim(),
+      content: contentToSave,
+      json: editorJSON ?? null,
+      date: date || getCurrentDate(),
+      contentClasses: "tiptap-content prose prose-slate max-w-none leading-relaxed",
+      keywords,
+    };
+  }, [content, editorJSON, isHtmlMode, title, date, keywords]);
+
+  // Save (create if no id yet, update otherwise).
+  // stay=true  → hotkey save; keep editing; do not clear; show "Saved ✓"
+  // stay=false → button save; then close via onClose()
+  const handleSave = useCallback(async (stay = false) => {
     setError("");
 
-    // Strong guard + log to help diagnose
+    // Guard
     if (!deckIdStr || typeof deckIdStr !== "string") {
       console.warn("AddCard: invalid deckId prop at save time:", deckId, "normalized:", deckIdStr);
       setError("Missing or invalid deckId");
@@ -139,45 +172,72 @@ export default function AddCard({ deckId }) {
 
     setSaving(true);
     try {
-      const contentToSave = isHtmlMode ? await prettifyHtml(content || "") : (content || "");
-      const payload = {
-        title: title.trim(),
-        content: contentToSave,
-        json: editorJSON ?? null,
-        date: date || getCurrentDate(),
-        contentClasses: "tiptap-content prose prose-slate max-w-none leading-relaxed",
-        keywords, // array
-      };
+      const payload = await buildPayload();
 
-      console.log("AddCard saving to:", selectedSubdeckId ? "subdeck" : "main", {
-        deckIdStr,
-        selectedSubdeckId,
-        payloadPreview: { title: payload.title, date: payload.date, keywords: payload.keywords },
-      });
-
-      if (selectedSubdeckId) {
-        await addCardToSubdeck(deckIdStr, selectedSubdeckId, payload);
+      // Create first time
+      if (!currentCardId) {
+        let newId;
+        if (selectedSubdeckId) {
+          newId = await addCardToSubdeck(deckIdStr, selectedSubdeckId, payload);
+        } else {
+          newId = await addCard(deckIdStr, payload);
+        }
+        setCurrentCardId(newId);
       } else {
-        await addCard(deckIdStr, payload);
+        // Update afterwards
+        if (selectedSubdeckId) {
+          await updateCardInSubdeck(deckIdStr, selectedSubdeckId, currentCardId, payload);
+        } else {
+          await updateCard(deckIdStr, currentCardId, payload);
+        }
       }
 
-      // Reset form
-      setTitle("");
-      setDate(getCurrentDate());
-      setContent("");
-      setEditorJSON(null);
-      setKeywordsText("");
-      // leave selectedSubdeckId as-is so adding multiple to same place is easy
+      if (stay) {
+        // Keep editing; no clearing; show tiny success blip
+        setJustSaved(true);
+        setTimeout(() => setJustSaved(false), 1200);
+      } else {
+        // Save button: close if parent provided onClose
+        if (typeof onClose === "function") onClose();
+      }
     } catch (e) {
-      console.error("❌ AddCard failed:", e?.code, e?.message, e);
+      console.error("❌ AddCard save failed:", e?.code, e?.message, e);
       setError(e?.message || "Failed to save card");
     } finally {
       setSaving(false);
     }
-  }
+  }, [
+    deckIdStr,
+    deckId,
+    title,
+    selectedSubdeckId,
+    currentCardId,
+    onClose,
+    buildPayload,
+  ]);
+
+  // Global hotkey: Ctrl/⌘+S → save & keep editing
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      const isSaveCombo = (e.ctrlKey || e.metaKey) && (e.key === "s" || e.key === "S");
+      if (isSaveCombo) {
+        e.preventDefault();
+        handleSave(true);
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [handleSave]);
 
   return (
-    <div className="p-4 rounded-2xl shadow-soft border space-y-4">
+    <div
+      ref={rootRef}
+      className="p-4 rounded-2xl shadow-soft border space-y-4 bg-white"
+      // Stop bubbling so outside click handlers won't close us
+      onMouseDownCapture={stopBubble}
+      onClickCapture={stopBubble}
+      onTouchStartCapture={stopBubble}
+    >
       {/* Title + Date */}
       <div className="flex flex-col gap-3 sm:flex-row">
         <input
@@ -204,7 +264,8 @@ export default function AddCard({ deckId }) {
           value={selectedSubdeckId}
           onChange={(e) => setSelectedSubdeckId(e.target.value)}
           className="w-full border rounded-xl px-3 py-2 bg-white text-gray-700"
-          disabled={saving || loadingSubdecks || !deckIdStr}
+          disabled={saving || loadingSubdecks || !deckIdStr || currentCardId /* lock location after first save */}
+          title={currentCardId ? "Location locked after first save" : undefined}
         >
           <option value="">Main deck</option>
           {subdecks.map((sd) => (
@@ -213,6 +274,9 @@ export default function AddCard({ deckId }) {
             </option>
           ))}
         </select>
+        {currentCardId && (
+          <p className="text-xs text-gray-500">Location is locked after the first save.</p>
+        )}
       </div>
 
       {/* Keywords */}
@@ -267,6 +331,12 @@ export default function AddCard({ deckId }) {
               </button>
             )}
           </div>
+
+          {/* Hotkey hint + saved indicator */}
+          <div className="text-xs text-gray-500">
+            Press <kbd className="px-1 py-0.5 border rounded">Ctrl/⌘+S</kbd> to save
+            {justSaved && <span className="ml-2 text-green-600">Saved ✓</span>}
+          </div>
         </div>
 
         {isHtmlMode ? (
@@ -292,12 +362,14 @@ export default function AddCard({ deckId }) {
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
+      {/* Save & Close */}
       <button
-        onClick={handleSave}
+        onClick={() => handleSave(false)}
         disabled={saving}
         className="px-4 py-2 rounded-2xl bg-bd text-gray-700 hover:bg-mmHover disabled:opacity-60"
+        title="Save and close"
       >
-        {saving ? "Saving..." : "Save Card"}
+        {saving ? "Saving..." : "Save"}
       </button>
     </div>
   );

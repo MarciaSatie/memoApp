@@ -188,6 +188,8 @@ export default function Card({
         <Modal
           open={open}
           onClose={closeModal}
+          closeOnBackdropClick={false}   // ⛔ don't close on outside click
+          closeOnEsc={false}             // ⛔ don't close on Esc
           title={
             editing
               ? `Edit Card${displayIndex ? ` • #${displayIndex}` : ""}`
@@ -196,10 +198,11 @@ export default function Card({
         >
           <div
             className="space-y-4 relative"
-            // stop pointer events so underlying carousel never sees drags/clicks
+            // Make extra-sure nothing bubbles out of the panel
             onPointerDown={(e) => e.stopPropagation()}
             onPointerUp={(e) => e.stopPropagation()}
             onClick={(e) => e.stopPropagation()}
+            onTouchStart={(e) => e.stopPropagation()}
           >
             {error && (
               <div className="text-sm text-red-600 border border-red-200 bg-red-50 px-3 py-2 rounded-lg">
@@ -231,7 +234,6 @@ export default function Card({
               </div>
             )}
 
-            {/* VIEW MODE */}
             {!editing ? (
               <>
                 {showDate && formattedPrimaryDate && (
@@ -257,6 +259,7 @@ export default function Card({
           </div>
         </Modal>
       )}
+
     </>
   );
 }

@@ -1,8 +1,9 @@
+// modal.jsx
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
-// ---- body lock helpers (same as you have) ----
+// ---- body lock helpers ----
 let BODY_LOCKS = 0;
 let PREV_OVERFLOW = "";
 let PREV_PADDING_RIGHT = "";
@@ -24,38 +25,78 @@ function unlockBody() {
   }
 }
 
-export default function Modal({ open, onClose, title, children }) {
+export default function Modal({
+  open,
+  onClose,
+  title,
+  children,
+  closeOnBackdropClick = true,   // control backdrop close
+  closeOnEsc = true,             // control Esc close
+}) {
   const [mounted, setMounted] = useState(false);
+  const backdropRef = useRef(null);
+  const panelRef = useRef(null);
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  // Track where the pointer went down so we can ignore mixed down/up
+  const pointerDownInsidePanel = useRef(false);
+
+  useEffect(() => { setMounted(true); }, []);
 
   useEffect(() => {
     if (!open) return;
-    const onKey = (e) => e.key === "Escape" && onClose?.();
+    const onKey = (e) => {
+      if (e.key === "Escape" && closeOnEsc) onClose?.();
+    };
     document.addEventListener("keydown", onKey);
     lockBody();
     return () => {
       document.removeEventListener("keydown", onKey);
       unlockBody();
     };
-  }, [open, onClose]);
+  }, [open, onClose, closeOnEsc]);
 
-  // Don’t render on the server or before mount (avoids the React dev error)
   if (!open || !mounted) return null;
+
+  // Backdrop mouse handlers (use pointer events for robustness)
+  const handleBackdropPointerDown = (e) => {
+    // If down starts inside the panel, mark it so we don't treat the eventual
+    // backdrop click as an outside click.
+    pointerDownInsidePanel.current = panelRef.current?.contains(e.target) ?? false;
+  };
+
+  const handleBackdropClick = (e) => {
+    // Only close if:
+    //  - backdrop closing is enabled
+    //  - the click originated AND ended on the backdrop (not the panel)
+    //  - the event target is exactly the backdrop (not a child)
+    if (!closeOnBackdropClick) return;
+
+    const startedInside = pointerDownInsidePanel.current;
+    const endedOnBackdrop = e.target === backdropRef.current;
+    const clickIsBackdrop = e.currentTarget === e.target;
+
+    if (!startedInside && endedOnBackdrop && clickIsBackdrop) {
+      onClose?.();
+    }
+  };
 
   return createPortal(
     <div
+      ref={backdropRef}
       className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/50"
-      onClick={onClose}
+      onPointerDown={handleBackdropPointerDown}
+      onClick={handleBackdropClick}
       aria-modal="true"
       role="dialog"
     >
       <div
+        ref={panelRef}
         className="relative w-full max-w-4xl h-[95vh] rounded-2xl bg-white p-6 shadow-xl text-foreground overflow-y-auto overscroll-contain"
         style={{ WebkitOverflowScrolling: "touch", touchAction: "pan-y" }}
+        // Block bubbling for safety (helps with parent click-away listeners)
+        onMouseDown={(e) => e.stopPropagation()}
         onClick={(e) => e.stopPropagation()}
+        onTouchStart={(e) => e.stopPropagation()}
       >
         <button
           onClick={onClose}
