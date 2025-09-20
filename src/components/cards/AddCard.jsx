@@ -234,9 +234,7 @@ export default function AddCard({ deckId, onClose }) {
       ref={rootRef}
       className="p-4 rounded-2xl shadow-soft border space-y-4 bg-white"
       // Stop bubbling so outside click handlers won't close us
-      onMouseDownCapture={stopBubble}
-      onClickCapture={stopBubble}
-      onTouchStartCapture={stopBubble}
+
     >
       {/* Title + Date */}
       <div className="flex flex-col gap-3 sm:flex-row">

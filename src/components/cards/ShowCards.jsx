@@ -203,10 +203,6 @@ export default function ShowCards({ deck }) {
       >
         <div
           // extra safety against any parent click-away in capture phase
-          onPointerDown={(e) => e.stopPropagation()}
-          onPointerUp={(e) => e.stopPropagation()}
-          onClick={(e) => e.stopPropagation()}
-          onTouchStart={(e) => e.stopPropagation()}
         >
           <AddCard deckId={deckId} onClose={handleCloseAddModal} />
         </div>
