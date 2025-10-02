@@ -195,7 +195,7 @@ export default function ShowCards({ deck }) {
       </button>
 
       <Modal
-        open={open}
+        open={open}npm run dev
         
         onClose={handleCloseAddModal}
         title="Add a new card"
